@@ -1,0 +1,37 @@
+pkgname=lintd
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Cross-distro Linux desktop package auditor built with Tauri"
+arch=('x86_64' 'aarch64')
+url="https://github.com/mfscpayload-690/lintd"
+license=('MIT')
+depends=('gtk3' 'webkit2gtk-4.1')
+makedepends=('cargo' 'nodejs' 'npm' 'git' 'webkit2gtk-4.1' 'gtk3' 'librsvg')
+source=("git+https://github.com/mfscpayload-690/lintd.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+  cd "${srcdir}/lintd"
+  npm install
+  npm run build
+  cargo build --release --manifest-path src-tauri/Cargo.toml
+}
+
+package() {
+  cd "${srcdir}/lintd"
+
+  install -Dm755 "src-tauri/target/release/lintd" "${pkgdir}/usr/bin/lintd"
+
+  install -Dm644 "src-tauri/icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/lintd.png"
+
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/lintd.desktop" << 'EOF'
+[Desktop Entry]
+Name=Lintd
+Comment=Cross-distro Linux desktop package auditor
+Exec=lintd
+Icon=lintd
+Terminal=false
+Type=Application
+Categories=Utility;System;
+EOF
+}
