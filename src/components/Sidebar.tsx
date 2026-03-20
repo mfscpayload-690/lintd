@@ -20,9 +20,11 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-[220px] border-r bg-card px-4 py-5">
       <div className="mb-8 flex items-center gap-2">
-        <div className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold">
-          L
-        </div>
+        <img
+          src="/app-icon.png"
+          alt="Lintd logo"
+          className="h-9 w-9 rounded-md border object-cover"
+        />
         <div>
           <div className="text-lg font-semibold leading-none">Lintd</div>
           <div className="text-xs text-muted-foreground">Package Auditor</div>
