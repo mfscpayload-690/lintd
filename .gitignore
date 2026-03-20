@@ -7,14 +7,28 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies and build outputs
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Tauri and Rust build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Local runtime/config files
 *.local
+.env
+.env.*
+!.env.example
+tree_output*.txt
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo
