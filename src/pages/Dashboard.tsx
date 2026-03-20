@@ -5,6 +5,7 @@ import { getAllPackages, getSystemInfo } from "../lib/commands";
 import { formatBytes, formatUptime } from "../lib/format";
 import { queryKeys } from "../lib/query-keys";
 import { DistroLogo } from "../components/DistroLogo";
+import { MetricGauge } from "../components/MetricGauge";
 import { RefreshButton } from "../components/RefreshButton";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -150,14 +151,34 @@ export function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Memory</CardTitle>
-            <CardDescription>RAM usage</CardDescription>
+            <CardTitle>System Metrics</CardTitle>
+            <CardDescription>Real-time performance</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-2xl font-semibold">{ramPercent}%</div>
-            <Progress value={ramPercent} />
-            <div className="text-sm text-muted-foreground">
-              {system.ram_used_mb} MB used / {system.ram_total_mb} MB total
+          <CardContent>
+            <div className="flex flex-wrap items-center justify-center gap-8 py-4">
+              <MetricGauge
+                value={system.cpu_usage_percent}
+                label="CPU"
+                sublabel={`${system.cpu_usage_percent.toFixed(1)}%`}
+                color="#6366F1"
+                size={160}
+              />
+              <MetricGauge
+                value={ramPercent}
+                label="RAM"
+                sublabel={`${(system.ram_used_mb / 1024).toFixed(1)} GB / ${(system.ram_total_mb / 1024).toFixed(1)} GB`}
+                color="#3B82F6"
+                size={160}
+              />
+              {system.gpu_name && system.gpu_vram_total_mb && (
+                <MetricGauge
+                  value={Math.round((system.gpu_vram_used_mb || 0) / system.gpu_vram_total_mb * 100)}
+                  label={system.gpu_name.length > 20 ? "GPU" : system.gpu_name}
+                  sublabel={`${system.gpu_vram_used_mb} MB / ${system.gpu_vram_total_mb} MB`}
+                  color="#8B5CF6"
+                  size={160}
+                />
+              )}
             </div>
           </CardContent>
         </Card>
