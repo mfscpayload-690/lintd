@@ -89,7 +89,7 @@ impl PackageManager for FlatpakBackend {
     }
 
     async fn list_orphans(&self) -> Result<Vec<Package>, PmalError> {
-        // List unused runtimes that no app depends on
+        // List all installed runtimes
         let output = run_command(
             "flatpak",
             &[
@@ -101,7 +101,7 @@ impl PackageManager for FlatpakBackend {
         .await?;
         let stdout = parse_stdout(&output)?;
 
-        // Get list of runtimes actually used
+        // Get list of runtimes actually used by apps
         let used_output = run_command(
             "flatpak",
             &["list", "--app", "--columns=runtime"],
@@ -109,7 +109,10 @@ impl PackageManager for FlatpakBackend {
         .await;
         let used_runtimes: Vec<String> = if let Ok(uo) = used_output {
             if let Ok(us) = parse_stdout(&uo) {
-                us.lines().map(|l| l.trim().to_string()).collect()
+                us.lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect()
             } else {
                 Vec::new()
             }
@@ -117,7 +120,9 @@ impl PackageManager for FlatpakBackend {
             Vec::new()
         };
 
-        let mut orphans = Vec::new();
+        let mut all_runtimes: Vec<(String, String, String, u64, String)> = Vec::new();
+
+        // Parse all runtimes
         for line in stdout.lines() {
             let fields: Vec<&str> = line.split('\t').collect();
             if fields.is_empty() {
@@ -125,13 +130,6 @@ impl PackageManager for FlatpakBackend {
             }
 
             let app_id = fields[0].trim().to_string();
-
-            // Check if this runtime is used by any app
-            let is_used = used_runtimes.iter().any(|r| r.contains(&app_id));
-            if is_used {
-                continue;
-            }
-
             let name = if fields.len() > 1 && !fields[1].trim().is_empty() {
                 fields[1].trim().to_string()
             } else {
@@ -152,6 +150,22 @@ impl PackageManager for FlatpakBackend {
             } else {
                 format!("Unused runtime: {}", app_id)
             };
+
+            all_runtimes.push((app_id, name, version, size_bytes, description));
+        }
+
+        let mut orphans = Vec::new();
+
+        for (app_id, name, version, size_bytes, description) in all_runtimes {
+            // Skip if this runtime is explicitly used by an app
+            if used_runtimes.iter().any(|r| r.contains(&app_id)) {
+                continue;
+            }
+
+            // Skip known system extensions that are pulled in by runtimes, not apps
+            if Self::is_system_extension(&app_id) {
+                continue;
+            }
 
             orphans.push(Package {
                 name,
@@ -238,6 +252,32 @@ impl PackageManager for FlatpakBackend {
 }
 
 impl FlatpakBackend {
+    fn is_system_extension(app_id: &str) -> bool {
+        // Known system extensions that are dependencies of runtimes, not orphans
+        // These are typically:
+        // - GPU drivers (.GL., .VAAPI.)
+        // - Codecs (.Codecs.)
+        // - Locale data (.Locale.)
+        // - GL extensions
+        // - Theme/shell extensions
+        let extension_patterns = [
+            ".GL.",
+            ".VAAPI.",
+            ".Codecs.",
+            ".Locale.",
+            ".Debug.",
+            ".Docs.",
+            ".Translations.",
+            "org.freedesktop.Platform.GL",
+            "org.freedesktop.Platform.VAAPI",
+            "org.freedesktop.Platform.Codecs",
+            "org.kde.Platform.GL",
+            "org.gnome.Platform.GL",
+        ];
+
+        extension_patterns.iter().any(|pattern| app_id.contains(pattern))
+    }
+
     fn parse_flatpak_size(s: &str) -> u64 {
         let s = s.trim();
         // Flatpak sizes can be like "123.4 MB" or "1.2 GB"
