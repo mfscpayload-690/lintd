@@ -24,6 +24,8 @@ export interface MountPoint {
 }
 
 export interface SystemInfo {
+  distro_id: string;
+  distro_id_like: string;
   distro_name: string;
   distro_version: string;
   distro_logo_name: string;

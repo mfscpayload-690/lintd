@@ -17,6 +17,7 @@ pub enum DistroFamily {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DistroInfo {
     pub id: String,
+    pub id_like: String,
     pub name: String,
     pub version: String,
     pub family: DistroFamily,
@@ -79,6 +80,7 @@ pub fn detect_distro() -> DistroInfo {
 
     DistroInfo {
         id,
+        id_like,
         name,
         version,
         family,

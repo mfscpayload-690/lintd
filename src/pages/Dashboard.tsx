@@ -108,7 +108,12 @@ export function Dashboard() {
           <CardContent>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex items-center gap-3 rounded-md border p-3">
-                <DistroLogo distroName={system.distro_logo_name || system.distro_name} size={46} />
+                <DistroLogo
+                  distroName={system.distro_name}
+                  distroId={system.distro_id || system.distro_logo_name}
+                  distroIdLike={system.distro_id_like}
+                  size={46}
+                />
                 <div>
                   <div className="font-semibold">{system.distro_name}</div>
                   <div className="text-sm text-muted-foreground">{system.distro_version}</div>

@@ -12,6 +12,8 @@ pub struct MountPoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemInfo {
+    pub distro_id: String,
+    pub distro_id_like: String,
     pub distro_name: String,
     pub distro_version: String,
     pub distro_logo_name: String,
@@ -81,6 +83,8 @@ pub fn collect_system_info(
         .collect();
 
     SystemInfo {
+        distro_id: distro.id.clone(),
+        distro_id_like: distro.id_like.clone(),
         distro_name: distro.name.clone(),
         distro_version: distro.version.clone(),
         distro_logo_name: distro.logo_name.clone(),

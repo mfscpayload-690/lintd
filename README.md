@@ -164,6 +164,17 @@ Tagged pushes matching v* generate a GitHub release with attached artifacts.
 
 An AUR-style PKGBUILD is included under src-tauri for packaging workflows that require Arch-compatible metadata.
 
+## Distro logo assets
+
+Dashboard distro logos are loaded from local SVG assets in public/distro-logos.
+
+To add support for another distro logo:
+
+1. Add the logo file to public/distro-logos as an SVG.
+2. Add an ID mapping in src/components/DistroLogo.tsx (exact distro ID).
+3. If needed, add an ID_LIKE family fallback mapping in src/components/DistroLogo.tsx.
+4. Rebuild and verify with npm run build.
+
 ## Contributing
 
 Contributions are welcome. If you plan to add a new package source backend:
