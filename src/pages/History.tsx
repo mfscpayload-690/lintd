@@ -4,6 +4,7 @@ import { getRemovalHistory } from "../lib/commands";
 import { formatBytes, formatDate } from "../lib/format";
 import { sourceBadgeClassMap, sourceLabelMap } from "../lib/presentation";
 import { queryKeys } from "../lib/query-keys";
+import { RefreshButton } from "../components/RefreshButton";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -45,6 +46,10 @@ export function History() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">History</h1>
+        <RefreshButton queryKeys={[queryKeys.removalHistory]} tooltip="Refresh removal history" />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Total Space Recovered</CardTitle>

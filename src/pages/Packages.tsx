@@ -14,6 +14,7 @@ import {
 import { queryKeys } from "../lib/query-keys";
 import { useDebouncedValue } from "../lib/use-debounced-value";
 import type { Package, PackageSource, UsageTag } from "../types/lintd";
+import { RefreshButton } from "../components/RefreshButton";
 import { RemovalModal } from "../components/RemovalModal";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -144,6 +145,10 @@ export function Packages() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Packages</h1>
+        <RefreshButton queryKeys={[queryKeys.allPackages]} tooltip="Refresh package list" />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Packages</CardTitle>

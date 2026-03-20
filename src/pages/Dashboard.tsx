@@ -5,6 +5,7 @@ import { getAllPackages, getSystemInfo } from "../lib/commands";
 import { formatBytes, formatUptime } from "../lib/format";
 import { queryKeys } from "../lib/query-keys";
 import { DistroLogo } from "../components/DistroLogo";
+import { RefreshButton } from "../components/RefreshButton";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
@@ -99,6 +100,10 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <RefreshButton queryKeys={[queryKeys.systemInfo, queryKeys.allPackages]} tooltip="Refresh system info and packages" />
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>

@@ -7,6 +7,7 @@ import { formatBytes, formatDate } from "../lib/format";
 import { sourceBadgeClassMap, sourceLabelMap, usageBadgeClassMap, usageLabelMap } from "../lib/presentation";
 import { queryKeys } from "../lib/query-keys";
 import type { Package, RemovalPreview } from "../types/lintd";
+import { RefreshButton } from "../components/RefreshButton";
 import { RemovalModal } from "../components/RemovalModal";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -142,6 +143,10 @@ export function Orphans() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Orphans</h1>
+        <RefreshButton queryKeys={[queryKeys.orphans]} tooltip="Refresh orphan packages" />
+      </div>
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-3 rounded-md border border-amber-500/30 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 md:flex-row md:items-center md:justify-between">
