@@ -1,50 +1,55 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Sidebar } from "./components/Sidebar";
+import { Toaster } from "./components/ui/toaster";
+import { useThemeStore } from "./lib/theme-store";
+import { Dashboard } from "./pages/Dashboard";
+import { History } from "./pages/History";
+import { Orphans } from "./pages/Orphans";
+import { Packages } from "./pages/Packages";
+
+const queryClient = new QueryClient();
+
+function ThemeSync(): null {
+  const mode = useThemeStore((state) => state.mode);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", mode === "dark");
+  }, [mode]);
+
+  return null;
+}
+
+function AppLayout() {
+  return (
+    <div className="min-h-screen bg-muted/30">
+      <Sidebar />
+      <main className="ml-[220px] min-h-screen p-4 md:p-6">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <ThemeSync />
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/packages" element={<Packages />} />
+            <Route path="/orphans" element={<Orphans />} />
+            <Route path="/history" element={<History />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
+    </QueryClientProvider>
   );
 }
 
