@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Lintd
+Comment=Cross-distro Linux package auditor
+Exec=lintd
+Icon=lintd
+Terminal=false
+Type=Application
+Categories=Utility;System;PackageManager;
+Keywords=package;manager;audit;clean;remove;orphan;
+Version=1.0

@@ -1,0 +1,23 @@
+pkgbase = lintd
+	pkgdesc = Cross-distro Linux desktop package auditor
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/mfscpayload-690/lintd
+	arch = x86_64
+	license = MIT
+	makedepends = cargo
+	makedepends = nodejs
+	makedepends = npm
+	makedepends = git
+	depends = gtk3
+	depends = webkit2gtk-4.1
+	depends = libappindicator-gtk3
+	depends = librsvg
+	depends = polkit
+	optdepends = flatpak: Flatpak package detection
+	optdepends = snapd: Snap package detection
+	optdepends = nvidia-utils: GPU metrics in dashboard
+	source = lintd-1.0.0.tar.gz::https://github.com/mfscpayload-690/lintd/archive/refs/tags/v1.0.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = lintd
