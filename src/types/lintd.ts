@@ -101,3 +101,9 @@ export interface RemovalRecord {
   space_recovered_bytes: number;
   command_executed: string;
 }
+
+export interface BackfillResult {
+  scanned: number;
+  updated: number;
+  skipped: number;
+}

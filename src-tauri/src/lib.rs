@@ -45,6 +45,7 @@ pub fn run() {
             commands::preview_removal,
             commands::execute_removal,
             commands::get_removal_history,
+            commands::backfill_flatpak_history_sizes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

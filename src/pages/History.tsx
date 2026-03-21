@@ -1,6 +1,8 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getRemovalHistory } from "../lib/commands";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { backfillFlatpakHistorySizes, getRemovalHistory } from "../lib/commands";
 import { formatBytes, formatDate } from "../lib/format";
 import { sourceBadgeClassMap, sourceLabelMap } from "../lib/presentation";
 import { queryKeys } from "../lib/query-keys";
@@ -34,9 +36,24 @@ function LoadingRows() {
 }
 
 export function History() {
+  const queryClient = useQueryClient();
+
   const historyQuery = useQuery({
     queryKey: queryKeys.removalHistory,
     queryFn: getRemovalHistory,
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: backfillFlatpakHistorySizes,
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.removalHistory });
+      toast.success(
+        `Backfill complete: updated ${result.updated} of ${result.scanned} Flatpak entries.`
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to backfill Flatpak history sizes");
+    },
   });
 
   const totalRecovered = useMemo(() => {
@@ -48,7 +65,19 @@ export function History() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">History</h1>
-        <RefreshButton queryKeys={[queryKeys.removalHistory]} tooltip="Refresh removal history" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+            className="gap-2"
+          >
+            {backfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Backfill Flatpak Sizes
+          </Button>
+          <RefreshButton queryKeys={[queryKeys.removalHistory]} tooltip="Refresh removal history" />
+        </div>
       </div>
       <Card>
         <CardHeader>

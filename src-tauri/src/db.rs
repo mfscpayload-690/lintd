@@ -123,6 +123,39 @@ impl Database {
 
         Ok(records)
     }
+
+    pub async fn get_flatpak_zero_space_history(&self) -> Result<Vec<(i64, String)>, DbError> {
+        let rows = sqlx::query_as::<_, FlatpakBackfillRow>(
+            "SELECT id, command_executed
+             FROM removal_history
+             WHERE source = 'flatpak' AND space_recovered_bytes = 0",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.id, row.command_executed))
+            .collect())
+    }
+
+    pub async fn update_removal_space_recovered(
+        &self,
+        id: i64,
+        space_recovered: u64,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            "UPDATE removal_history
+             SET space_recovered_bytes = ?
+             WHERE id = ?",
+        )
+        .bind(space_recovered as i64)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -132,5 +165,11 @@ struct RemovalRow {
     source: String,
     removed_at: String,
     space_recovered_bytes: i64,
+    command_executed: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct FlatpakBackfillRow {
+    id: i64,
     command_executed: String,
 }
