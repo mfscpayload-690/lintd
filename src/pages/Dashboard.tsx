@@ -30,6 +30,15 @@ function LoadingSkeleton() {
   );
 }
 
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="h-full rounded-lg border bg-card p-4">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-2 text-2xl font-bold leading-none">{value}</div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const systemQuery = useQuery({
     queryKey: queryKeys.systemInfo,
@@ -149,6 +158,13 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
+        <div className="grid h-full grid-cols-2 gap-3">
+          <StatCard label="Total Installed" value={stats.totalInstalled} />
+          <StatCard label="Orphans" value={stats.orphans} />
+          <StatCard label="Never Launched" value={stats.neverLaunched} />
+          <StatCard label="Rarely Used" value={stats.rarelyUsed} />
+        </div>
+
       </div>
 
       <section className="space-y-3">
@@ -182,33 +198,6 @@ export function Dashboard() {
           ) : null}
         </div>
       </section>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Installed</CardDescription>
-            <CardTitle className="text-2xl">{stats.totalInstalled}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Orphans</CardDescription>
-            <CardTitle className="text-2xl">{stats.orphans}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Never Launched</CardDescription>
-            <CardTitle className="text-2xl">{stats.neverLaunched}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Rarely Used</CardDescription>
-            <CardTitle className="text-2xl">{stats.rarelyUsed}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
 
       <Card>
         <CardHeader>
