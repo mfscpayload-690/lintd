@@ -1,6 +1,6 @@
 [package]
 name = "lintd"
-version = "0.1.0"
+version = "1.0.0"
 description = "Cross-distro Linux package auditor"
 authors = ["Lintd Contributors"]
 edition = "2021"

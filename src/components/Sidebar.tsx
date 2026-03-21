@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { useThemeStore } from "../lib/theme-store";
 import { cn } from "../lib/utils";
 
-const APP_VERSION = "v0.1.0";
+const APP_VERSION = "v1.0.0";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
