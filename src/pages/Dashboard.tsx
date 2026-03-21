@@ -149,40 +149,39 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>System Metrics</CardTitle>
-            <CardDescription>Real-time performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center justify-center gap-8 py-4">
-              <MetricGauge
-                value={system.cpu_usage_percent}
-                label="CPU"
-                sublabel={`${system.cpu_usage_percent.toFixed(1)}%`}
-                color="#6366F1"
-                size={160}
-              />
-              <MetricGauge
-                value={ramPercent}
-                label="RAM"
-                sublabel={`${(system.ram_used_mb / 1024).toFixed(1)} GB / ${(system.ram_total_mb / 1024).toFixed(1)} GB`}
-                color="#3B82F6"
-                size={160}
-              />
-              {system.gpu_name && system.gpu_vram_total_mb && (
-                <MetricGauge
-                  value={Math.round((system.gpu_vram_used_mb || 0) / system.gpu_vram_total_mb * 100)}
-                  label={system.gpu_name.length > 20 ? "GPU" : system.gpu_name}
-                  sublabel={`${system.gpu_vram_used_mb} MB / ${system.gpu_vram_total_mb} MB`}
-                  color="#8B5CF6"
-                  size={160}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold">System Metrics</h2>
+          <p className="text-sm text-muted-foreground">Real-time performance</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <MetricGauge
+            value={system.cpu_usage_percent}
+            label="CPU"
+            sublabel={`${system.cpu_usage_percent.toFixed(1)}%`}
+            color="#6366F1"
+            size={180}
+          />
+          <MetricGauge
+            value={ramPercent}
+            label="RAM"
+            sublabel={`${(system.ram_used_mb / 1024).toFixed(1)} GB / ${(system.ram_total_mb / 1024).toFixed(1)} GB`}
+            color="#3B82F6"
+            size={180}
+          />
+          {system.gpu_name && system.gpu_vram_total_mb ? (
+            <MetricGauge
+              value={Math.round(((system.gpu_vram_used_mb || 0) / system.gpu_vram_total_mb) * 100)}
+              label="GPU"
+              sublabel={`${system.gpu_vram_used_mb || 0} MB / ${system.gpu_vram_total_mb} MB`}
+              color="#A855F7"
+              size={180}
+            />
+          ) : null}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

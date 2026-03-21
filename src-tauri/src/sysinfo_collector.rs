@@ -36,16 +36,6 @@ pub struct SystemInfo {
     pub top_packages_by_size: Vec<(String, u64)>,
 }
 
-/// Calculate average CPU usage percentage across all cores
-fn get_cpu_usage_percent(sys: &System) -> f32 {
-    let cpus = sys.cpus();
-    if cpus.is_empty() {
-        return 0.0;
-    }
-    let sum: f32 = cpus.iter().map(|c| c.cpu_usage()).sum();
-    (sum / cpus.len() as f32).min(100.0)
-}
-
 /// Detect NVIDIA GPU using nvidia-smi
 fn detect_nvidia_gpu() -> Option<(String, u64, u64)> {
     let output = Command::new("nvidia-smi")
@@ -79,6 +69,8 @@ pub fn collect_system_info(
 ) -> SystemInfo {
     let mut sys = System::new_all();
     sys.refresh_all();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    sys.refresh_cpu_all();
 
     let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".into());
     let hostname = System::host_name().unwrap_or_else(|| "Unknown".into());
@@ -96,7 +88,11 @@ pub fn collect_system_info(
         .map(|c| c.brand().to_string())
         .unwrap_or_else(|| "Unknown".into());
     let cpu_cores = sys.cpus().len() as u32;
-    let cpu_usage_percent = get_cpu_usage_percent(&sys);
+    let cpu_usage_percent = if sys.cpus().is_empty() {
+        0.0
+    } else {
+        (sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32).min(100.0)
+    };
 
     let ram_total_mb = sys.total_memory() / (1024 * 1024);
     let ram_used_mb = sys.used_memory() / (1024 * 1024);
