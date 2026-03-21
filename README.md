@@ -24,6 +24,13 @@ lintd addresses this by:
 - Light and dark theme support
 - Linux packaging targets for AppImage and Deb
 
+## Screenshots
+<img width="1920" height="1200" alt="Screenshot From 2026-03-21 11-54-21" src="https://github.com/user-attachments/assets/5f370f92-338c-4410-8eb9-7c1eac4a0d52" />
+<img width="1920" height="1200" alt="Screenshot From 2026-03-21 11-54-34" src="https://github.com/user-attachments/assets/0c256721-9e5d-4994-95b8-210146b52577" />
+<img width="1920" height="1200" alt="Screenshot From 2026-03-21 11-54-39" src="https://github.com/user-attachments/assets/daef2c2e-ecc1-41c6-b62e-b086ecc0087f" />
+<img width="1920" height="1200" alt="Screenshot From 2026-03-21 11-54-48" src="https://github.com/user-attachments/assets/ec0a8144-6c50-4f98-97c1-cab4ac94e6af" />
+
+
 ## Supported package sources
 
 - pacman
