@@ -1,6 +1,6 @@
 use crate::pmal::{
     compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult, UsageTag,
+    Package, PackageManager, PackageSource, PmalError, RemovalResult,
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 
@@ -27,7 +27,7 @@ impl PacmanBackend {
 
     fn parse_pacman_qi(output: &str) -> Vec<Package> {
         let mut packages = Vec::new();
-        let mut current: Option<Package> = None;
+        let _current: Option<Package> = None;
 
         for block in output.split("\n\n") {
             let mut name = String::new();

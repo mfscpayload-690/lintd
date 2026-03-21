@@ -102,14 +102,14 @@ impl PackageManager for ApkBackend {
 
     async fn list_orphans(&self) -> Result<Vec<Package>, PmalError> {
         // Packages installed as dependencies that are no longer needed
-        let world_output = run_command("apk", &["info", "-r"]).await;
+        let _world_output = run_command("apk", &["info", "-r"]).await;
         // For Alpine, orphan detection is less straightforward
         // We look for packages not in the world file
         let world = std::fs::read_to_string("/etc/apk/world").unwrap_or_default();
         let world_pkgs: Vec<&str> = world.lines().map(|l| l.trim()).collect();
 
         let all = self.list_user_installed().await?;
-        let mut orphans: Vec<Package> = all
+        let orphans: Vec<Package> = all
             .into_iter()
             .filter(|p| !world_pkgs.contains(&p.name.as_str()))
             .map(|mut p| {

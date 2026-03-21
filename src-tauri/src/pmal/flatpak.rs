@@ -2,7 +2,6 @@ use crate::pmal::{
     compute_usage_tag, get_last_used_time, run_command, parse_stdout,
     Package, PackageManager, PackageSource, PmalError, RemovalResult,
 };
-use chrono::{DateTime, NaiveDateTime, Utc};
 
 pub struct FlatpakBackend;
 

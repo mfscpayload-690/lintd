@@ -29,9 +29,11 @@ pub enum PmalError {
     PackageNotFound(String),
 
     #[error("Permission denied: {0}")]
+    #[allow(dead_code)]
     PermissionDenied(String),
 
     #[error("Parse error: {0}")]
+    #[allow(dead_code)]
     ParseError(String),
 
     #[error("IO error: {0}")]
@@ -94,6 +96,7 @@ pub struct Package {
     pub is_orphan: bool,
     pub usage_tag: UsageTag,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub files: Vec<String>,
 }
 
