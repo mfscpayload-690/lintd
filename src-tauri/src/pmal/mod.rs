@@ -1,3 +1,33 @@
+//! Package Manager Abstraction Layer (PMAL)
+//!
+//! This module provides a unified interface for interacting with multiple Linux package managers.
+//! Each package manager backend implements the `PackageManager` trait, allowing the application
+//! to query packages, detect orphans, and execute removals in a consistent way.
+//!
+//! # Supported Package Managers
+//!
+//! - **pacman** - Arch Linux native package manager
+//! - **apt** - Debian/Ubuntu package manager
+//! - **dnf** - Fedora/RHEL package manager
+//! - **flatpak** - Universal Linux application distribution
+//! - **snap** - Canonical's universal package format
+//! - **apk** - Alpine Linux package manager
+//! - **nix** - Nix package manager
+//! - **appimage** - Portable Linux applications (filesystem scan)
+//!
+//! # Architecture
+//!
+//! Each package manager backend is responsible for:
+//! - Detecting if the package manager is available on the system
+//! - Listing user-installed packages
+//! - Detecting orphaned packages
+//! - Fetching package metadata (files, dependencies)
+//! - Generating removal previews
+//! - Executing safe package removals
+//!
+//! All backends normalize their output to common data structures (`Package`, `RemovalPreview`, etc.)
+//! so the frontend can work with a consistent API regardless of the underlying package manager.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -174,15 +204,125 @@ pub fn is_system_critical(name: &str) -> bool {
 
 // ── PackageManager trait ─────────────────────────────────────────
 
+/// Core trait that all package manager backends must implement.
+///
+/// This trait defines the contract for package manager implementations, providing
+/// a uniform interface for package operations across different package ecosystems.
+///
+/// # Implementation Notes
+///
+/// - All async methods should have reasonable timeouts (default: 30s)
+/// - Package lists should be normalized to the common `Package` struct
+/// - Safety checks (system-critical packages, reverse deps) should be thorough
+/// - Error messages should be descriptive for debugging
+///
+/// # Example
+///
+/// ```rust,ignore
+/// pub struct MyPackageManager;
+///
+/// #[async_trait::async_trait]
+/// impl PackageManager for MyPackageManager {
+///     fn name(&self) -> &str { "my_manager" }
+///     fn source(&self) -> PackageSource { PackageSource::Manual }
+///     fn detect(&self) -> bool {
+///         std::path::Path::new("/usr/bin/my-manager").exists()
+///     }
+///     // ... implement other methods
+/// }
+/// ```
 #[async_trait::async_trait]
 pub trait PackageManager: Send + Sync {
+    /// Returns the human-readable name of this package manager.
     fn name(&self) -> &str;
+
+    /// Returns the PackageSource enum variant for this manager.
     fn source(&self) -> PackageSource;
+
+    /// Detects if this package manager is available on the system.
+    ///
+    /// Typically checks for the existence of the package manager's binary
+    /// or configuration files.
     fn detect(&self) -> bool;
+
+    /// Lists all user-installed packages from this package manager.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `Package` structs with normalized metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PmalError` if the command fails or times out.
     async fn list_user_installed(&self) -> Result<Vec<Package>, PmalError>;
+
+    /// Lists packages that are orphaned or no longer needed.
+    ///
+    /// Orphan detection logic is package-manager specific:
+    /// - pacman: packages not required by any other package
+    /// - apt: packages installed as dependencies that are no longer needed
+    /// - Some managers may not support orphan detection
+    ///
+    /// # Returns
+    ///
+    /// A vector of orphaned `Package` structs.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PmalError` if the command fails or times out.
     async fn list_orphans(&self) -> Result<Vec<Package>, PmalError>;
+
+    /// Gets the list of packages that depend on this package.
+    ///
+    /// Used to prevent unsafe removals when other packages depend on this one.
+    ///
+    /// # Arguments
+    ///
+    /// * `pkg` - The package name to check
+    ///
+    /// # Returns
+    ///
+    /// A vector of package names that depend on `pkg`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PmalError` if the command fails or times out.
     async fn get_reverse_deps(&self, pkg: &str) -> Result<Vec<String>, PmalError>;
+
+    /// Gets the list of files installed by this package.
+    ///
+    /// # Arguments
+    ///
+    /// * `pkg` - The package name to query
+    ///
+    /// # Returns
+    ///
+    /// A vector of absolute file paths installed by this package.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PmalError` if the command fails or the package is not found.
     async fn get_files(&self, pkg: &str) -> Result<Vec<String>, PmalError>;
+
+    /// Removes a package from the system.
+    ///
+    /// # Arguments
+    ///
+    /// * `pkg` - The package name to remove
+    /// * `dry_run` - If true, simulates removal without actually removing
+    ///
+    /// # Returns
+    ///
+    /// A `RemovalResult` indicating success or failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PmalError` if the removal fails or times out.
+    ///
+    /// # Safety
+    ///
+    /// This method should verify that the package is safe to remove before
+    /// executing the removal command. It may invoke privileged commands via polkit.
     async fn remove(&self, pkg: &str, dry_run: bool) -> Result<RemovalResult, PmalError>;
 }
 
@@ -191,6 +331,21 @@ pub trait PackageManager: Send + Sync {
 use std::process::Output;
 use tokio::process::Command;
 
+/// Runs a command with a 30-second timeout.
+///
+/// # Arguments
+///
+/// * `program` - The program to execute
+/// * `args` - Command-line arguments to pass to the program
+///
+/// # Returns
+///
+/// The command output if successful.
+///
+/// # Errors
+///
+/// Returns `PmalError::Timeout` if the command takes longer than 30 seconds.
+/// Returns `PmalError::CommandFailed` if the command fails to execute.
 pub async fn run_command(program: &str, args: &[&str]) -> Result<Output, PmalError> {
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(30),
@@ -210,6 +365,19 @@ pub async fn run_command(program: &str, args: &[&str]) -> Result<Output, PmalErr
     }
 }
 
+/// Parses command stdout, returning an error if the command failed.
+///
+/// # Arguments
+///
+/// * `output` - The command output to parse
+///
+/// # Returns
+///
+/// The stdout as a string if the command succeeded.
+///
+/// # Errors
+///
+/// Returns `PmalError::CommandFailed` with stderr content if the command failed.
 pub fn parse_stdout(output: &Output) -> Result<String, PmalError> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -220,6 +388,17 @@ pub fn parse_stdout(output: &Output) -> Result<String, PmalError> {
 
 // ── Usage tag helper ─────────────────────────────────────────────
 
+/// Computes a usage tag based on when a package was last used.
+///
+/// # Arguments
+///
+/// * `last_used` - Optional timestamp of last usage
+///
+/// # Returns
+///
+/// - `UsageTag::NeverLaunched` if last_used is None
+/// - `UsageTag::RarelyUsed` if last used more than 60 days ago
+/// - `UsageTag::Active` if last used within 60 days
 pub fn compute_usage_tag(last_used: Option<DateTime<Utc>>) -> UsageTag {
     match last_used {
         None => UsageTag::NeverLaunched,
@@ -490,6 +669,30 @@ fn get_pacman_bin_paths_cached(pkg_name: &str) -> Vec<String> {
     bin_paths
 }
 
+/// Determines when a package was last used by checking multiple heuristics.
+///
+/// This function employs several strategies to determine package usage:
+///
+/// 1. **Binary access time** - Checks atime of executables in common bin directories
+/// 2. **Systemd service timestamps** - For daemon packages, checks service last active time
+/// 3. **Shell history** - Searches bash/zsh/fish history for package mentions
+/// 4. **Desktop file access** - Checks .desktop file atime for GUI applications
+/// 5. **Pacman file list cache** - Uses pacman's file list if available
+///
+/// # Arguments
+///
+/// * `pkg_name` - The package name to check
+/// * `files` - Optional list of files installed by the package
+///
+/// # Returns
+///
+/// The most recent timestamp found across all heuristics, or None if no usage detected.
+///
+/// # Notes
+///
+/// - Packages matching common library/runtime patterns are always marked as active
+/// - Access times may be unreliable on some filesystems (e.g., noatime mount option)
+/// - This is a best-effort heuristic and may not be 100% accurate
 pub fn get_last_used_time(pkg_name: &str, files: &[String]) -> Option<DateTime<Utc>> {
     if is_always_active_package(pkg_name) {
         return Some(Utc::now());
