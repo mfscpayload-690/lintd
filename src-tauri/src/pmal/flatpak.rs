@@ -10,6 +10,50 @@ impl FlatpakBackend {
     pub fn new() -> Self {
         Self
     }
+
+    async fn resolve_ref(&self, pkg: &str) -> Result<String, PmalError> {
+        // If caller already passed a Flatpak app/runtime ID, use it as-is.
+        if pkg.contains('.') {
+            return Ok(pkg.to_string());
+        }
+
+        // Match by display name for installed apps and runtimes.
+        let app_output = run_command(
+            "flatpak",
+            &["list", "--app", "--columns=application,name"],
+        )
+        .await;
+
+        if let Ok(output) = app_output {
+            if let Ok(stdout) = parse_stdout(&output) {
+                for line in stdout.lines() {
+                    let fields: Vec<&str> = line.split('\t').collect();
+                    if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(pkg) {
+                        return Ok(fields[0].trim().to_string());
+                    }
+                }
+            }
+        }
+
+        let runtime_output = run_command(
+            "flatpak",
+            &["list", "--runtime", "--columns=application,name"],
+        )
+        .await;
+
+        if let Ok(output) = runtime_output {
+            if let Ok(stdout) = parse_stdout(&output) {
+                for line in stdout.lines() {
+                    let fields: Vec<&str> = line.split('\t').collect();
+                    if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(pkg) {
+                        return Ok(fields[0].trim().to_string());
+                    }
+                }
+            }
+        }
+
+        Ok(pkg.to_string())
+    }
 }
 
 #[async_trait::async_trait]
@@ -185,6 +229,8 @@ impl PackageManager for FlatpakBackend {
     }
 
     async fn get_reverse_deps(&self, pkg: &str) -> Result<Vec<String>, PmalError> {
+        let pkg_ref = self.resolve_ref(pkg).await?;
+
         // For flatpak, check if any apps depend on this runtime
         let output = run_command(
             "flatpak",
@@ -195,7 +241,7 @@ impl PackageManager for FlatpakBackend {
 
         let deps: Vec<String> = stdout
             .lines()
-            .filter(|l| l.contains(pkg))
+            .filter(|l| l.contains(&pkg_ref))
             .filter_map(|l| l.split('\t').next())
             .map(|s| s.trim().to_string())
             .collect();
@@ -204,11 +250,13 @@ impl PackageManager for FlatpakBackend {
     }
 
     async fn get_files(&self, pkg: &str) -> Result<Vec<String>, PmalError> {
+        let pkg_ref = self.resolve_ref(pkg).await?;
+
         // Flatpak apps are in /var/lib/flatpak or ~/.local/share/flatpak
         let home = std::env::var("HOME").unwrap_or_default();
         let paths = vec![
-            format!("/var/lib/flatpak/app/{}", pkg),
-            format!("{}/.local/share/flatpak/app/{}", home, pkg),
+            format!("/var/lib/flatpak/app/{}", pkg_ref),
+            format!("{}/.local/share/flatpak/app/{}", home, pkg_ref),
         ];
 
         let mut files = Vec::new();
@@ -222,26 +270,28 @@ impl PackageManager for FlatpakBackend {
     }
 
     async fn remove(&self, pkg: &str, dry_run: bool) -> Result<RemovalResult, PmalError> {
+        let pkg_ref = self.resolve_ref(pkg).await?;
+
         if dry_run {
             return Ok(RemovalResult {
-                package_name: pkg.to_string(),
+                package_name: pkg_ref.clone(),
                 success: true,
-                message: format!("Dry run: would remove {} via flatpak uninstall", pkg),
+                message: format!("Dry run: would remove {} via flatpak uninstall", pkg_ref),
                 space_recovered_bytes: 0,
             });
         }
 
         let output = run_command(
             "flatpak",
-            &["uninstall", "-y", pkg],
+            &["uninstall", "-y", &pkg_ref],
         )
         .await?;
 
         if output.status.success() {
             Ok(RemovalResult {
-                package_name: pkg.to_string(),
+                package_name: pkg_ref.clone(),
                 success: true,
-                message: format!("Successfully removed {}", pkg),
+                message: format!("Successfully removed {}", pkg_ref),
                 space_recovered_bytes: 0,
             })
         } else {

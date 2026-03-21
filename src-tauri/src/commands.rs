@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::distro_detect;
 use crate::pmal::{
-    is_system_critical, Package, PackageManager, PackageSource,
+    is_system_critical, parse_stdout, run_command, Package, PackageManager, PackageSource,
     RemovalPreview, RemovalRecord, RemovalResult,
 };
 use crate::sysinfo_collector::{self, SystemInfo};
@@ -27,6 +27,48 @@ fn get_removal_command(name: &str, source: &PackageSource) -> String {
         PackageSource::AppImage => format!("rm {}", name),
         PackageSource::Manual => format!("# manual removal of {}", name),
     }
+}
+
+async fn resolve_flatpak_ref(name: &str) -> String {
+    if name.contains('.') {
+        return name.to_string();
+    }
+
+    let app_output = run_command(
+        "flatpak",
+        &["list", "--app", "--columns=application,name"],
+    )
+    .await;
+
+    if let Ok(output) = app_output {
+        if let Ok(stdout) = parse_stdout(&output) {
+            for line in stdout.lines() {
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(name) {
+                    return fields[0].trim().to_string();
+                }
+            }
+        }
+    }
+
+    let runtime_output = run_command(
+        "flatpak",
+        &["list", "--runtime", "--columns=application,name"],
+    )
+    .await;
+
+    if let Ok(output) = runtime_output {
+        if let Ok(stdout) = parse_stdout(&output) {
+            for line in stdout.lines() {
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(name) {
+                    return fields[0].trim().to_string();
+                }
+            }
+        }
+    }
+
+    name.to_string()
 }
 
 fn find_manager<'a>(
@@ -139,7 +181,12 @@ pub async fn preview_removal(
     let reverse_deps = manager.get_reverse_deps(&name).await.unwrap_or_default();
     let critical = is_system_critical(&name);
     let safe = reverse_deps.is_empty() && !critical;
-    let cmd = get_removal_command(&name, &source);
+    let cmd_target = if source == PackageSource::Flatpak {
+        resolve_flatpak_ref(&name).await
+    } else {
+        name.clone()
+    };
+    let cmd = get_removal_command(&cmd_target, &source);
 
     // Estimate size from files
     let size: u64 = files.iter()
@@ -171,7 +218,12 @@ pub async fn execute_removal(
         return Err("Cannot remove system-critical package".into());
     }
 
-    let cmd = get_removal_command(&name, &source);
+    let cmd_target = if source == PackageSource::Flatpak {
+        resolve_flatpak_ref(&name).await
+    } else {
+        name.clone()
+    };
+    let cmd = get_removal_command(&cmd_target, &source);
     let manager = find_manager(&state.managers, &source)
         .ok_or_else(|| format!("No manager found for source {:?}", source))?;
 
