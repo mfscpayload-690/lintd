@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+  BackfillResult,
   SystemInfo,
   Package,
   PackageSource,
@@ -75,4 +76,11 @@ export async function executeRemoval(
  */
 export async function getRemovalHistory(): Promise<RemovalRecord[]> {
   return invoke<RemovalRecord[]>('get_removal_history');
+}
+
+/**
+ * Recalculates historical Flatpak removal rows that still have 0 B recovered.
+ */
+export async function backfillFlatpakHistorySizes(): Promise<BackfillResult> {
+  return invoke<BackfillResult>('backfill_flatpak_history_sizes');
 }

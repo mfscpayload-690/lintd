@@ -36,8 +36,12 @@ export interface SystemInfo {
   shell: string;
   cpu_model: string;
   cpu_cores: number;
+  cpu_usage_percent: number;
   ram_total_mb: number;
   ram_used_mb: number;
+  gpu_name: string | null;
+  gpu_vram_used_mb: number | null;
+  gpu_vram_total_mb: number | null;
   uptime_seconds: number;
   storage: MountPoint[];
   top_packages_by_size: [string, number][]; // Tuple of [name, size_bytes]
@@ -96,4 +100,10 @@ export interface RemovalRecord {
   removed_at: string; // ISO 8601 string from chrono
   space_recovered_bytes: number;
   command_executed: string;
+}
+
+export interface BackfillResult {
+  scanned: number;
+  updated: number;
+  skipped: number;
 }

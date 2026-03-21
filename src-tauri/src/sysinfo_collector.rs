@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountPoint {
@@ -24,11 +25,53 @@ pub struct SystemInfo {
     pub shell: String,
     pub cpu_model: String,
     pub cpu_cores: u32,
+    pub cpu_usage_percent: f32,
     pub ram_total_mb: u64,
     pub ram_used_mb: u64,
+    pub gpu_name: Option<String>,
+    pub gpu_vram_used_mb: Option<u64>,
+    pub gpu_vram_total_mb: Option<u64>,
     pub uptime_seconds: u64,
     pub storage: Vec<MountPoint>,
     pub top_packages_by_size: Vec<(String, u64)>,
+}
+
+/// Calculate average CPU usage percentage across all cores
+fn get_cpu_usage_percent(sys: &System) -> f32 {
+    let cpus = sys.cpus();
+    if cpus.is_empty() {
+        return 0.0;
+    }
+    let sum: f32 = cpus.iter().map(|c| c.cpu_usage()).sum();
+    (sum / cpus.len() as f32).min(100.0)
+}
+
+/// Detect NVIDIA GPU using nvidia-smi
+fn detect_nvidia_gpu() -> Option<(String, u64, u64)> {
+    let output = Command::new("nvidia-smi")
+        .args(&[
+            "--query-gpu=name,memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let line = String::from_utf8(output.stdout).ok()?;
+    let parts: Vec<&str> = line.trim().split(',').collect();
+
+    if parts.len() < 3 {
+        return None;
+    }
+
+    let name = parts[0].trim().to_string();
+    let used_mb = parts[1].trim().parse::<u64>().ok()?;
+    let total_mb = parts[2].trim().parse::<u64>().ok()?;
+
+    Some((name, used_mb, total_mb))
 }
 
 pub fn collect_system_info(
@@ -53,10 +96,16 @@ pub fn collect_system_info(
         .map(|c| c.brand().to_string())
         .unwrap_or_else(|| "Unknown".into());
     let cpu_cores = sys.cpus().len() as u32;
+    let cpu_usage_percent = get_cpu_usage_percent(&sys);
 
     let ram_total_mb = sys.total_memory() / (1024 * 1024);
     let ram_used_mb = sys.used_memory() / (1024 * 1024);
     let uptime_seconds = System::uptime();
+
+    // Detect NVIDIA GPU
+    let (gpu_name, gpu_vram_used_mb, gpu_vram_total_mb) = detect_nvidia_gpu()
+        .map(|(name, used, total)| (Some(name), Some(used), Some(total)))
+        .unwrap_or((None, None, None));
 
     let disks = Disks::new_with_refreshed_list();
     let storage: Vec<MountPoint> = disks.list().iter()
@@ -95,8 +144,12 @@ pub fn collect_system_info(
         shell,
         cpu_model,
         cpu_cores,
+        cpu_usage_percent,
         ram_total_mb,
         ram_used_mb,
+        gpu_name,
+        gpu_vram_used_mb,
+        gpu_vram_total_mb,
         uptime_seconds,
         storage,
         top_packages_by_size: Vec::new(), // Populated after package scan

@@ -1,9 +1,10 @@
 use crate::db::Database;
 use crate::distro_detect;
 use crate::pmal::{
-    is_system_critical, Package, PackageManager, PackageSource,
+    is_system_critical, parse_stdout, run_command, Package, PackageManager, PackageSource,
     RemovalPreview, RemovalRecord, RemovalResult,
 };
+use serde::Serialize;
 use crate::sysinfo_collector::{self, SystemInfo};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -12,6 +13,13 @@ pub struct AppState {
     pub managers: Vec<Box<dyn PackageManager>>,
     pub distro: distro_detect::DistroInfo,
     pub db: Database,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BackfillResult {
+    pub scanned: u64,
+    pub updated: u64,
+    pub skipped: u64,
 }
 
 fn get_removal_command(name: &str, source: &PackageSource) -> String {
@@ -27,6 +35,116 @@ fn get_removal_command(name: &str, source: &PackageSource) -> String {
         PackageSource::AppImage => format!("rm {}", name),
         PackageSource::Manual => format!("# manual removal of {}", name),
     }
+}
+
+async fn resolve_flatpak_ref(name: &str) -> String {
+    if name.contains('.') {
+        return name.to_string();
+    }
+
+    let app_output = run_command(
+        "flatpak",
+        &["list", "--app", "--columns=application,name"],
+    )
+    .await;
+
+    if let Ok(output) = app_output {
+        if let Ok(stdout) = parse_stdout(&output) {
+            for line in stdout.lines() {
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(name) {
+                    return fields[0].trim().to_string();
+                }
+            }
+        }
+    }
+
+    let runtime_output = run_command(
+        "flatpak",
+        &["list", "--runtime", "--columns=application,name"],
+    )
+    .await;
+
+    if let Ok(output) = runtime_output {
+        if let Ok(stdout) = parse_stdout(&output) {
+            for line in stdout.lines() {
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() >= 2 && fields[1].trim().eq_ignore_ascii_case(name) {
+                    return fields[0].trim().to_string();
+                }
+            }
+        }
+    }
+
+    name.to_string()
+}
+
+fn extract_flatpak_ref_from_command(command: &str) -> Option<String> {
+    let tokens: Vec<&str> = command.split_whitespace().collect();
+    if tokens.len() < 3 || tokens.first().copied() != Some("flatpak") {
+        return None;
+    }
+
+    let uninstall_index = tokens.iter().position(|t| *t == "uninstall")?;
+    let ref_token = tokens
+        .iter()
+        .skip(uninstall_index + 1)
+        .rev()
+        .find(|t| !t.starts_with('-'))?;
+
+    Some((*ref_token).to_string())
+}
+
+fn parse_flatpak_size_to_bytes(size: &str) -> u64 {
+    let trimmed = size.trim();
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if parts.is_empty() {
+        return 0;
+    }
+
+    let numeric = parts[0].replace(',', "");
+    let num: f64 = numeric.parse().unwrap_or(0.0);
+    let unit = if parts.len() > 1 {
+        parts[1].to_uppercase()
+    } else {
+        "B".to_string()
+    };
+
+    match unit.as_str() {
+        "KB" | "KIB" | "K" => (num * 1024.0) as u64,
+        "MB" | "MIB" | "M" => (num * 1024.0 * 1024.0) as u64,
+        "GB" | "GIB" | "G" => (num * 1024.0 * 1024.0 * 1024.0) as u64,
+        _ => num as u64,
+    }
+}
+
+async fn estimate_flatpak_ref_size_bytes(pkg_ref: &str) -> u64 {
+    let output = run_command("flatpak", &["info", "--show-size", pkg_ref]).await;
+    let Ok(output) = output else {
+        return 0;
+    };
+
+    let Ok(stdout) = parse_stdout(&output) else {
+        return 0;
+    };
+
+    for line in stdout.lines() {
+        let lower = line.to_lowercase();
+        if !lower.contains("installed") {
+            continue;
+        }
+
+        if let Some((_, value_part)) = line.split_once(':') {
+            let value = value_part.trim();
+            let human = value.split('(').next().unwrap_or(value).trim();
+            let parsed = parse_flatpak_size_to_bytes(human);
+            if parsed > 0 {
+                return parsed;
+            }
+        }
+    }
+
+    0
 }
 
 fn find_manager<'a>(
@@ -139,7 +257,12 @@ pub async fn preview_removal(
     let reverse_deps = manager.get_reverse_deps(&name).await.unwrap_or_default();
     let critical = is_system_critical(&name);
     let safe = reverse_deps.is_empty() && !critical;
-    let cmd = get_removal_command(&name, &source);
+    let cmd_target = if source == PackageSource::Flatpak {
+        resolve_flatpak_ref(&name).await
+    } else {
+        name.clone()
+    };
+    let cmd = get_removal_command(&cmd_target, &source);
 
     // Estimate size from files
     let size: u64 = files.iter()
@@ -171,7 +294,12 @@ pub async fn execute_removal(
         return Err("Cannot remove system-critical package".into());
     }
 
-    let cmd = get_removal_command(&name, &source);
+    let cmd_target = if source == PackageSource::Flatpak {
+        resolve_flatpak_ref(&name).await
+    } else {
+        name.clone()
+    };
+    let cmd = get_removal_command(&cmd_target, &source);
     let manager = find_manager(&state.managers, &source)
         .ok_or_else(|| format!("No manager found for source {:?}", source))?;
 
@@ -192,4 +320,45 @@ pub async fn get_removal_history(
 ) -> Result<Vec<RemovalRecord>, String> {
     let state = state.lock().await;
     state.db.get_removal_history().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn backfill_flatpak_history_sizes(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<BackfillResult, String> {
+    let state = state.lock().await;
+    let candidates = state
+        .db
+        .get_flatpak_zero_space_history()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut updated = 0u64;
+    let mut skipped = 0u64;
+
+    for (id, command) in &candidates {
+        let Some(pkg_ref) = extract_flatpak_ref_from_command(command) else {
+            skipped += 1;
+            continue;
+        };
+
+        let size = estimate_flatpak_ref_size_bytes(&pkg_ref).await;
+        if size == 0 {
+            skipped += 1;
+            continue;
+        }
+
+        state
+            .db
+            .update_removal_space_recovered(*id, size)
+            .await
+            .map_err(|e| e.to_string())?;
+        updated += 1;
+    }
+
+    Ok(BackfillResult {
+        scanned: candidates.len() as u64,
+        updated,
+        skipped,
+    })
 }
