@@ -31,17 +31,50 @@ lintd addresses this by:
 <img width="1920" height="1200" alt="Screenshot From 2026-03-21 11-54-48" src="https://github.com/user-attachments/assets/ec0a8144-6c50-4f98-97c1-cab4ac94e6af" />
 
 
+## Installation
+
+### From Release Binaries
+
+Download the latest release from the [Releases page](https://github.com/mfscpayload-690/lintd/releases):
+
+**AppImage:**
+```bash
+chmod +x lintd_*.AppImage
+./lintd_*.AppImage
+```
+
+**Debian/Ubuntu (.deb):**
+```bash
+sudo dpkg -i lintd_*.deb
+sudo apt-get install -f  # Install any missing dependencies
+```
+
+**Arch Linux (AUR):**
+```bash
+# Using yay or another AUR helper
+yay -S lintd
+
+# Or manually
+git clone https://aur.archlinux.org/lintd.git
+cd lintd
+makepkg -si
+```
+
+### From Source
+
+See the [Local development](#local-development) section below.
+
 ## Supported package sources
 
-- pacman
-- aur (detected via foreign pacman packages)
-- apt
-- dnf
-- flatpak
-- snap
-- apk
-- nix
-- appimage (filesystem scan)
+- **pacman** - Arch Linux native package manager
+- **aur** - Arch User Repository (detected via foreign pacman packages)
+- **apt** - Debian/Ubuntu package manager
+- **dnf** - Fedora/RHEL package manager
+- **flatpak** - Universal Linux application distribution
+- **snap** - Canonical's universal package format
+- **apk** - Alpine Linux package manager
+- **nix** - Nix package manager
+- **appimage** - Portable Linux applications (filesystem scan)
 
 ## Architecture overview
 
@@ -84,18 +117,61 @@ src-tauri/src/           Rust backend and Tauri entrypoints
 
 ## Prerequisites
 
+### For Running lintd
+
+- Linux desktop environment with GTK3 and WebKitGTK support
+- Optional: Package managers you want to audit (pacman, apt, dnf, flatpak, snap, etc.)
+
+### For Development
+
 - Node.js 20+
 - npm 10+
 - Rust stable toolchain
 - Linux desktop environment with WebKitGTK and GTK3 dev libraries
 
-Ubuntu or Debian example dependencies:
+#### Ubuntu/Debian Dependencies
 
-- libwebkit2gtk-4.1-dev
-- libgtk-3-dev
-- libayatana-appindicator3-dev
-- librsvg2-dev
-- patchelf
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf \
+  build-essential \
+  curl \
+  wget \
+  file
+```
+
+#### Arch Linux Dependencies
+
+```bash
+sudo pacman -S --needed \
+  webkit2gtk-4.1 \
+  gtk3 \
+  libayatana-appindicator \
+  librsvg \
+  base-devel \
+  curl \
+  wget \
+  file
+```
+
+#### Fedora/RHEL Dependencies
+
+```bash
+sudo dnf install -y \
+  webkit2gtk4.1-devel \
+  gtk3-devel \
+  libappindicator-gtk3-devel \
+  librsvg2-devel \
+  openssl-devel \
+  curl \
+  wget \
+  file
+```
 
 ## Local development
 
@@ -182,15 +258,112 @@ To add support for another distro logo:
 3. If needed, add an ID_LIKE family fallback mapping in src/components/DistroLogo.tsx.
 4. Rebuild and verify with npm run build.
 
+## Troubleshooting
+
+### App won't start
+
+**Issue:** Double-clicking the AppImage does nothing or shows permission error.
+
+**Solution:** Make the AppImage executable:
+```bash
+chmod +x lintd_*.AppImage
+```
+
+**Issue:** Error about missing libraries (GTK, WebKit, etc.)
+
+**Solution:** Install the required system dependencies for your distro (see [Prerequisites](#prerequisites)).
+
+### Package manager not detected
+
+**Issue:** A package manager you have installed is not showing up in lintd.
+
+**Solution:**
+- Verify the package manager binary is in your PATH: `which pacman apt dnf flatpak snap`
+- Restart lintd after installing a new package manager
+- Check if the package manager requires additional setup (e.g., Nix requires sourcing profile)
+
+### Cannot remove packages
+
+**Issue:** Package removal fails with permission error.
+
+**Solution:** lintd uses `pkexec` (polkit) for privilege escalation. Ensure:
+- polkit is installed and running
+- Your user is in the appropriate group (usually `wheel` or `sudo`)
+- The package manager supports the removal command being used
+
+**Issue:** Package shows as "system-critical" and cannot be removed.
+
+**Solution:** This is intentional. lintd blocks removal of essential system packages (kernel, libc, init system, package managers, etc.) to prevent breaking your system. If you really need to remove such a package, use the native package manager directly.
+
+### Orphan detection issues
+
+**Issue:** No orphans are detected, but you expect some.
+
+**Solution:**
+- Orphan detection is package-manager specific
+- Some managers (like Flatpak) don't have a concept of orphans
+- Run your package manager's native orphan detection to compare (e.g., `pacman -Qdt`)
+
+### Database errors
+
+**Issue:** Error about SQLite database or removal history.
+
+**Solution:** The database is stored in your user data directory. To reset it:
+```bash
+rm -rf ~/.local/share/lintd/
+```
+Note: This will delete your removal history.
+
+### Build issues
+
+**Issue:** `npm run tauri build` fails with Rust compilation errors.
+
+**Solution:**
+- Update Rust: `rustup update`
+- Clean build artifacts: `cd src-tauri && cargo clean`
+- Ensure all system dependencies are installed
+
+**Issue:** Frontend build fails with TypeScript errors.
+
+**Solution:**
+- Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+- Clear TypeScript cache: `rm -rf node_modules/.cache`
+
+### Performance issues
+
+**Issue:** App is slow to load packages or appears frozen.
+
+**Solution:**
+- Initial package loading can take 10-30 seconds on systems with many packages
+- If the app appears frozen for > 60 seconds, check terminal output for errors
+- Large package lists (>5000 packages) may impact performance
+
+### Still having issues?
+
+Open an issue on [GitHub Issues](https://github.com/mfscpayload-690/lintd/issues) with:
+- Your distro and version
+- Installed package managers (`which pacman apt dnf flatpak snap`)
+- Steps to reproduce
+- Error messages or logs
+
 ## Contributing
 
-Contributions are welcome. If you plan to add a new package source backend:
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
 
-1. Implement the PackageManager trait in a dedicated backend module.
-2. Register detection and manager initialization in distro detection.
-3. Ensure output is normalized to shared package types.
-4. Validate removal safety logic and preview integrity.
+- Code style and conventions
+- Development setup
+- Adding new package manager backends
+- Pull request process
+- Reporting bugs and suggesting features
+
+Quick contribution checklist:
+
+1. Implement the PackageManager trait in a dedicated backend module
+2. Register detection and manager initialization in distro detection
+3. Ensure output is normalized to shared package types
+4. Validate removal safety logic and preview integrity
+5. Test thoroughly on the target platform
 
 ## License
 
-This repository is currently maintained without an explicit license file. Add a LICENSE file before distributing binaries broadly.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
