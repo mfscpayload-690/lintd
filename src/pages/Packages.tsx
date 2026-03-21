@@ -82,6 +82,38 @@ function LoadingRows() {
   );
 }
 
+function isLikelyCritical(pkg: Package): boolean {
+  const name = pkg.name.toLowerCase();
+  const exactMatches = new Set([
+    "linux",
+    "linux-lts",
+    "linux-zen",
+    "linux-hardened",
+    "linux-headers",
+    "glibc",
+    "systemd",
+    "webkit2gtk",
+    "polkit",
+    "dbus",
+    "sudo",
+    "bash",
+    "pacman",
+    "dpkg",
+    "apt",
+    "dnf",
+  ]);
+
+  if (exactMatches.has(name)) {
+    return true;
+  }
+
+  if (name.startsWith("nvidia-") && (name.includes("dkms") || name.includes("open"))) {
+    return true;
+  }
+
+  return false;
+}
+
 export function Packages() {
   const [searchInput, setSearchInput] = useState("");
   const [sourceFilter, setSourceFilter] = useState<PackageSource | "all">("all");
@@ -284,9 +316,15 @@ export function Packages() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedPackage(pkg)}>
-                        Inspect & Remove
-                      </Button>
+                      {isLikelyCritical(pkg) ? (
+                        <Button size="sm" variant="outline" disabled className="opacity-50 cursor-not-allowed">
+                          System Package
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setSelectedPackage(pkg)}>
+                          Inspect & Remove
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

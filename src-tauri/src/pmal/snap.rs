@@ -1,5 +1,5 @@
 use crate::pmal::{
-    compute_usage_tag, get_desktop_atime, run_command, parse_stdout,
+    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
     Package, PackageManager, PackageSource, PmalError, RemovalResult,
 };
 
@@ -76,7 +76,7 @@ impl PackageManager for SnapBackend {
 
             let size_bytes = Self::get_snap_size(&name).await;
             let description = Self::get_snap_description(&name).await;
-            let last_used = get_desktop_atime(&name);
+            let last_used = get_last_used_time(&name, &[]);
             let usage_tag = compute_usage_tag(last_used);
 
             packages.push(Package {
