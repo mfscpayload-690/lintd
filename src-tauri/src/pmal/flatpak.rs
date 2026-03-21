@@ -54,6 +54,39 @@ impl FlatpakBackend {
 
         Ok(pkg.to_string())
     }
+
+    async fn estimate_installed_size_bytes(&self, pkg_ref: &str) -> u64 {
+        let output = run_command("flatpak", &["info", "--show-size", pkg_ref]).await;
+        let Ok(output) = output else {
+            return 0;
+        };
+
+        let Ok(stdout) = parse_stdout(&output) else {
+            return 0;
+        };
+
+        for line in stdout.lines() {
+            let lower = line.to_lowercase();
+            if !lower.contains("installed") {
+                continue;
+            }
+
+            if let Some((_, value_part)) = line.split_once(':') {
+                let value = value_part.trim();
+                let human = value
+                    .split('(')
+                    .next()
+                    .unwrap_or(value)
+                    .trim();
+                let parsed = Self::parse_flatpak_size(human);
+                if parsed > 0 {
+                    return parsed;
+                }
+            }
+        }
+
+        0
+    }
 }
 
 #[async_trait::async_trait]
@@ -271,13 +304,14 @@ impl PackageManager for FlatpakBackend {
 
     async fn remove(&self, pkg: &str, dry_run: bool) -> Result<RemovalResult, PmalError> {
         let pkg_ref = self.resolve_ref(pkg).await?;
+        let estimated_size_bytes = self.estimate_installed_size_bytes(&pkg_ref).await;
 
         if dry_run {
             return Ok(RemovalResult {
                 package_name: pkg_ref.clone(),
                 success: true,
                 message: format!("Dry run: would remove {} via flatpak uninstall", pkg_ref),
-                space_recovered_bytes: 0,
+                space_recovered_bytes: estimated_size_bytes,
             });
         }
 
@@ -292,7 +326,7 @@ impl PackageManager for FlatpakBackend {
                 package_name: pkg_ref.clone(),
                 success: true,
                 message: format!("Successfully removed {}", pkg_ref),
-                space_recovered_bytes: 0,
+                space_recovered_bytes: estimated_size_bytes,
             })
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -335,7 +369,8 @@ impl FlatpakBackend {
         if parts.is_empty() {
             return 0;
         }
-        let num: f64 = parts[0].parse().unwrap_or(0.0);
+        let numeric = parts[0].replace(',', "");
+        let num: f64 = numeric.parse().unwrap_or(0.0);
         let unit = if parts.len() > 1 {
             parts[1].to_uppercase()
         } else {
