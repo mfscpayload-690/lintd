@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 use thiserror::Error;
 
 pub mod apk;
@@ -228,8 +231,197 @@ pub fn compute_usage_tag(last_used: Option<DateTime<Utc>>) -> UsageTag {
     }
 }
 
-/// Try to find last access time from a .desktop file for the given package name.
-pub fn get_desktop_atime(pkg_name: &str) -> Option<DateTime<Utc>> {
+fn is_always_active_package(pkg_name: &str) -> bool {
+    let lower = pkg_name.to_lowercase();
+    let patterns = [
+        "lib",
+        "headers",
+        "dkms",
+        "devel",
+        "dev",
+        "-git",
+        "firmware",
+        "driver",
+        "kernel",
+        "linux-",
+        "codec",
+        "runtime",
+        "gtk",
+        "qt",
+    ];
+
+    patterns.iter().any(|p| lower.contains(p))
+}
+
+fn push_name_variants(pkg_name: &str) -> Vec<String> {
+    let mut variants = vec![pkg_name.to_string()];
+    let underscore = pkg_name.replace('-', "_");
+    if underscore != pkg_name {
+        variants.push(underscore);
+    }
+
+    if let Some(first) = pkg_name.split('-').next() {
+        if !first.is_empty() && !variants.iter().any(|v| v == first) {
+            variants.push(first.to_string());
+        }
+    }
+
+    variants
+}
+
+fn newer_atime_than_mtime(path: &Path) -> Option<DateTime<Utc>> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let accessed = metadata.accessed().ok()?;
+    let modified = metadata.modified().ok()?;
+    if accessed <= modified {
+        return None;
+    }
+    Some(accessed.into())
+}
+
+fn max_dt(current: Option<DateTime<Utc>>, candidate: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+    match (current, candidate) {
+        (None, None) => None,
+        (Some(v), None) | (None, Some(v)) => Some(v),
+        (Some(a), Some(b)) => Some(if a > b { a } else { b }),
+    }
+}
+
+fn get_binary_atime(pkg_name: &str, files: &[String]) -> Option<DateTime<Utc>> {
+    let bin_dirs = ["/usr/bin", "/usr/local/bin", "/usr/sbin", "/bin", "/sbin"];
+    let variants = push_name_variants(pkg_name);
+    let mut latest: Option<DateTime<Utc>> = None;
+
+    for dir in &bin_dirs {
+        for variant in &variants {
+            let path = Path::new(dir).join(variant);
+            latest = max_dt(latest, newer_atime_than_mtime(&path));
+        }
+    }
+
+    for file in files {
+        if file.starts_with("/usr/bin/")
+            || file.starts_with("/usr/local/bin/")
+            || file.starts_with("/usr/sbin/")
+            || file.starts_with("/bin/")
+            || file.starts_with("/sbin/")
+        {
+            latest = max_dt(latest, newer_atime_than_mtime(Path::new(file)));
+        }
+    }
+
+    latest
+}
+
+fn parse_systemctl_timestamp(value: &str) -> Option<DateTime<Utc>> {
+    let ts = value.trim();
+    if ts.is_empty() || ts == "n/a" {
+        return None;
+    }
+
+    chrono::DateTime::parse_from_str(ts, "%a %Y-%m-%d %H:%M:%S %Z")
+        .or_else(|_| chrono::DateTime::parse_from_str(ts, "%a %Y-%m-%d %H:%M:%S %z"))
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn try_service_timestamp(service_name: &str) -> Option<DateTime<Utc>> {
+    let output = std::process::Command::new("timeout")
+        .args([
+            "3s",
+            "systemctl",
+            "show",
+            service_name,
+            "--property=ActiveEnterTimestamp",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let line = stdout.lines().next()?;
+    let value = line.strip_prefix("ActiveEnterTimestamp=")?;
+    parse_systemctl_timestamp(value)
+}
+
+fn get_service_last_active_time(pkg_name: &str) -> Option<DateTime<Utc>> {
+    let mut names = vec![pkg_name.to_string(), format!("{}.service", pkg_name)];
+    match pkg_name {
+        "mariadb" => names.push("mariadb.service".to_string()),
+        "mongodb" => {
+            names.push("mongodb.service".to_string());
+            names.push("mongod.service".to_string());
+        }
+        "postgresql" => names.push("postgresql.service".to_string()),
+        "nginx" => names.push("nginx.service".to_string()),
+        "sshd" => names.push("sshd.service".to_string()),
+        _ => {}
+    }
+
+    let mut latest: Option<DateTime<Utc>> = None;
+    for name in names {
+        latest = max_dt(latest, try_service_timestamp(&name));
+    }
+    latest
+}
+
+fn history_contains_pkg(path: &Path, pkg_name: &str) -> bool {
+    std::fs::read_to_string(path)
+        .map(|contents| contents.to_lowercase().contains(&pkg_name.to_lowercase()))
+        .unwrap_or(false)
+}
+
+fn fish_history_has_cmd(path: &Path, pkg_name: &str) -> bool {
+    let contents = std::fs::read_to_string(path).unwrap_or_default();
+    let needle = pkg_name.to_lowercase();
+    contents
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("- cmd:"))
+        .any(|cmd| cmd.to_lowercase().contains(&needle))
+}
+
+fn get_shell_history_recency(pkg_name: &str) -> Option<DateTime<Utc>> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if home.is_empty() {
+        return None;
+    }
+
+    let bash = Path::new(&home).join(".bash_history");
+    let zsh = Path::new(&home).join(".zsh_history");
+    let fish_local = Path::new(&home).join(".local/share/fish/fish_history");
+    let fish_config = Path::new(&home).join(".config/fish/fish_history");
+
+    let mut latest: Option<DateTime<Utc>> = None;
+
+    for path in [&bash, &zsh] {
+        if history_contains_pkg(path, pkg_name) {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if let Ok(mtime) = metadata.modified() {
+                    latest = max_dt(latest, Some(mtime.into()));
+                }
+            }
+        }
+    }
+
+    for path in [&fish_local, &fish_config] {
+        if fish_history_has_cmd(path, pkg_name) {
+            latest = max_dt(latest, Some(Utc::now() - chrono::Duration::days(7)));
+        } else if history_contains_pkg(path, pkg_name) {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if let Ok(mtime) = metadata.modified() {
+                    latest = max_dt(latest, Some(mtime.into()));
+                }
+            }
+        }
+    }
+
+    latest
+}
+
+fn get_desktop_atime(pkg_name: &str) -> Option<DateTime<Utc>> {
     let xdg_data_dirs = std::env::var("XDG_DATA_DIRS")
         .unwrap_or_else(|_| "/usr/share:/usr/local/share".to_string());
     let home = std::env::var("HOME").unwrap_or_default();
@@ -249,4 +441,74 @@ pub fn get_desktop_atime(pkg_name: &str) -> Option<DateTime<Utc>> {
         }
     }
     None
+}
+
+static PACMAN_BIN_CACHE: OnceLock<Mutex<HashMap<String, Vec<String>>>> = OnceLock::new();
+static PACMAN_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
+fn get_pacman_bin_paths_cached(pkg_name: &str) -> Vec<String> {
+    let pacman_available = *PACMAN_AVAILABLE.get_or_init(|| Path::new("/usr/bin/pacman").exists());
+    if !pacman_available {
+        return Vec::new();
+    }
+
+    let cache = PACMAN_BIN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    if let Ok(guard) = cache.lock() {
+        if let Some(paths) = guard.get(pkg_name) {
+            return paths.clone();
+        }
+    }
+
+    let output = std::process::Command::new("pacman")
+        .args(["-Ql", pkg_name])
+        .output();
+
+    let mut bin_paths = Vec::new();
+    if let Ok(output) = output {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.splitn(2, ' ').collect();
+                if parts.len() == 2 {
+                    let path = parts[1].trim();
+                    if path.starts_with("/usr/bin/") {
+                        bin_paths.push(path.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(pkg_name.to_string(), bin_paths.clone());
+    }
+
+    bin_paths
+}
+
+pub fn get_last_used_time(pkg_name: &str, files: &[String]) -> Option<DateTime<Utc>> {
+    if is_always_active_package(pkg_name) {
+        return Some(Utc::now());
+    }
+
+    let mut latest: Option<DateTime<Utc>> = None;
+
+    // SOURCE 1: Binary access time (+ file list hints)
+    latest = max_dt(latest, get_binary_atime(pkg_name, files));
+
+    // SOURCE 2: systemd service last active timestamp
+    latest = max_dt(latest, get_service_last_active_time(pkg_name));
+
+    // SOURCE 3: shell history recency
+    latest = max_dt(latest, get_shell_history_recency(pkg_name));
+
+    // SOURCE 4: desktop file access time
+    latest = max_dt(latest, get_desktop_atime(pkg_name));
+
+    // SOURCE 5: pacman binary list cache lookup
+    let pacman_bin_paths = get_pacman_bin_paths_cached(pkg_name);
+    latest = max_dt(latest, get_binary_atime(pkg_name, &pacman_bin_paths));
+
+    latest
 }

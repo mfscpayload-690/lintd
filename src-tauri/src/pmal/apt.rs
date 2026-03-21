@@ -1,5 +1,5 @@
 use crate::pmal::{
-    compute_usage_tag, get_desktop_atime, run_command, parse_stdout,
+    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
     Package, PackageManager, PackageSource, PmalError, RemovalResult,
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -26,7 +26,7 @@ impl AptBackend {
             let size_bytes: u64 = fields[2].trim().parse().unwrap_or(0) * 1024; // dpkg reports in KB
             let description = fields[3].trim().to_string();
 
-            let last_used = get_desktop_atime(&name);
+            let last_used = get_last_used_time(&name, &[]);
             let usage_tag = compute_usage_tag(last_used);
 
             // Try to get install date from dpkg info dir

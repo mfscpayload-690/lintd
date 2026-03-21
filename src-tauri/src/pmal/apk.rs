@@ -1,5 +1,5 @@
 use crate::pmal::{
-    compute_usage_tag, get_desktop_atime, run_command, parse_stdout,
+    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
     Package, PackageManager, PackageSource, PmalError, RemovalResult,
 };
 
@@ -41,7 +41,7 @@ impl PackageManager for ApkBackend {
             let line = line.trim();
             if line.is_empty() {
                 if !current_name.is_empty() {
-                    let last_used = get_desktop_atime(&current_name);
+                    let last_used = get_last_used_time(&current_name, &[]);
                     let usage_tag = compute_usage_tag(last_used);
                     packages.push(Package {
                         name: current_name.clone(),
@@ -81,7 +81,7 @@ impl PackageManager for ApkBackend {
 
         // Don't forget the last package
         if !current_name.is_empty() {
-            let last_used = get_desktop_atime(&current_name);
+            let last_used = get_last_used_time(&current_name, &[]);
             let usage_tag = compute_usage_tag(last_used);
             packages.push(Package {
                 name: current_name,
