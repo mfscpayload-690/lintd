@@ -203,7 +203,7 @@ export function Orphans() {
 
           {!orphansQuery.isLoading && !orphansQuery.isError && orphans.length === 0 ? (
             <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
-              No orphan packages found 🎉
+              No orphan packages found
             </div>
           ) : null}
 
