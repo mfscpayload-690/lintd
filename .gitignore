@@ -36,3 +36,9 @@ tree_output*.txt
 *.njsproj
 *.sln
 *.sw?
+
+*.pkg.tar.zst
+*.AppImage
+pkg/
+src/lintd-bin-*
+src/lintd.png
