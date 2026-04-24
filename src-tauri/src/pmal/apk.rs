@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 
 pub struct ApkBackend;
@@ -22,8 +22,7 @@ impl PackageManager for ApkBackend {
     }
 
     fn detect(&self) -> bool {
-        std::path::Path::new("/sbin/apk").exists()
-            || std::path::Path::new("/usr/sbin/apk").exists()
+        std::path::Path::new("/sbin/apk").exists() || std::path::Path::new("/usr/sbin/apk").exists()
     }
 
     async fn list_user_installed(&self) -> Result<Vec<Package>, PmalError> {

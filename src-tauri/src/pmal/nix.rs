@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 
 pub struct NixBackend;
@@ -32,11 +32,7 @@ impl PackageManager for NixBackend {
     }
 
     async fn list_user_installed(&self) -> Result<Vec<Package>, PmalError> {
-        let output = run_command(
-            "nix-env",
-            &["--query", "--installed", "--json"],
-        )
-        .await?;
+        let output = run_command("nix-env", &["--query", "--installed", "--json"]).await?;
         let stdout = parse_stdout(&output)?;
 
         // Try JSON parsing first
@@ -78,7 +74,13 @@ impl PackageManager for NixBackend {
         // Fallback to plain text parsing
         let output = run_command(
             "nix-env",
-            &["--query", "--installed", "--attr-path", "--no-name", "--out-path"],
+            &[
+                "--query",
+                "--installed",
+                "--attr-path",
+                "--no-name",
+                "--out-path",
+            ],
         )
         .await?;
         let stdout = parse_stdout(&output)?;
@@ -92,7 +94,10 @@ impl PackageManager for NixBackend {
 
             let full_name = parts[0];
             let (name, version) = if let Some(idx) = full_name.rfind('-') {
-                (full_name[..idx].to_string(), full_name[idx + 1..].to_string())
+                (
+                    full_name[..idx].to_string(),
+                    full_name[idx + 1..].to_string(),
+                )
             } else {
                 (full_name.to_string(), String::new())
             };
@@ -138,15 +143,16 @@ impl PackageManager for NixBackend {
             };
 
             let (name, version) = if let Some(idx) = after_hash.rfind('-') {
-                (after_hash[..idx].to_string(), after_hash[idx + 1..].to_string())
+                (
+                    after_hash[..idx].to_string(),
+                    after_hash[idx + 1..].to_string(),
+                )
             } else {
                 (after_hash.to_string(), String::new())
             };
 
             // Get size of the store path
-            let size_bytes = std::fs::metadata(path)
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
             packages.push(Package {
                 name,

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use sysinfo::{Disks, System};
 use std::process::Command;
+use sysinfo::{Disks, System};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountPoint {
@@ -65,9 +65,7 @@ fn detect_nvidia_gpu() -> Option<(String, u64, u64)> {
     Some((name, used_mb, total_mb))
 }
 
-pub fn collect_system_info(
-    distro: &crate::distro_detect::DistroInfo,
-) -> SystemInfo {
+pub fn collect_system_info(distro: &crate::distro_detect::DistroInfo) -> SystemInfo {
     let mut sys = System::new_all();
     sys.refresh_all();
     std::thread::sleep(std::time::Duration::from_millis(300));
@@ -85,7 +83,9 @@ pub fn collect_system_info(
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "Unknown".into());
 
-    let cpu_model = sys.cpus().first()
+    let cpu_model = sys
+        .cpus()
+        .first()
         .map(|c| c.brand().to_string())
         .unwrap_or_else(|| "Unknown".into());
     let cpu_cores = sys.cpus().len() as u32;
@@ -105,7 +105,9 @@ pub fn collect_system_info(
         .unwrap_or((None, None, None));
 
     let disks = Disks::new_with_refreshed_list();
-    let storage: Vec<MountPoint> = disks.list().iter()
+    let storage: Vec<MountPoint> = disks
+        .list()
+        .iter()
         .filter(|d| {
             let mount = d.mount_point().to_string_lossy().to_string();
             !mount.starts_with("/snap/")

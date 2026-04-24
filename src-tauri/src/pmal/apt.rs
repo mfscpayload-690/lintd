@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 use chrono::{DateTime, Utc};
 
@@ -115,7 +115,10 @@ impl PackageManager for AptBackend {
         let output = run_command("deborphan", &[]).await;
         let orphan_names: Vec<String> = if let Ok(o) = output {
             if let Ok(s) = parse_stdout(&o) {
-                s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()
+                s.lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect()
             } else {
                 Vec::new()
             }
@@ -200,8 +203,7 @@ impl PackageManager for AptBackend {
             });
         }
 
-        let output =
-            run_command("pkexec", &["apt-get", "remove", "--purge", "-y", pkg]).await?;
+        let output = run_command("pkexec", &["apt-get", "remove", "--purge", "-y", pkg]).await?;
 
         if output.status.success() {
             Ok(RemovalResult {

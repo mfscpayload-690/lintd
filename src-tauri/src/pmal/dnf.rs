@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 use chrono::DateTime;
 
@@ -29,8 +29,13 @@ impl PackageManager for DnfBackend {
     async fn list_user_installed(&self) -> Result<Vec<Package>, PmalError> {
         let output = run_command(
             "dnf",
-            &["repoquery", "--installed", "--userinstalled", "--qf",
-              "%{name}\\t%{version}-%{release}\\t%{installsize}\\t%{summary}\\t%{installtime}"],
+            &[
+                "repoquery",
+                "--installed",
+                "--userinstalled",
+                "--qf",
+                "%{name}\\t%{version}-%{release}\\t%{installsize}\\t%{summary}\\t%{installtime}",
+            ],
         )
         .await?;
         let stdout = parse_stdout(&output)?;
@@ -77,8 +82,12 @@ impl PackageManager for DnfBackend {
     async fn list_orphans(&self) -> Result<Vec<Package>, PmalError> {
         let output = run_command(
             "dnf",
-            &["repoquery", "--extras", "--qf",
-              "%{name}\\t%{version}-%{release}\\t%{installsize}\\t%{summary}\\t%{installtime}"],
+            &[
+                "repoquery",
+                "--extras",
+                "--qf",
+                "%{name}\\t%{version}-%{release}\\t%{installsize}\\t%{summary}\\t%{installtime}",
+            ],
         )
         .await?;
         let stdout = parse_stdout(&output)?;
@@ -125,7 +134,14 @@ impl PackageManager for DnfBackend {
     async fn get_reverse_deps(&self, pkg: &str) -> Result<Vec<String>, PmalError> {
         let output = run_command(
             "dnf",
-            &["repoquery", "--installed", "--whatrequires", pkg, "--qf", "%{name}"],
+            &[
+                "repoquery",
+                "--installed",
+                "--whatrequires",
+                pkg,
+                "--qf",
+                "%{name}",
+            ],
         )
         .await?;
         let stdout = parse_stdout(&output)?;

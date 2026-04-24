@@ -4,11 +4,11 @@ use crate::pmal::{
     is_system_critical, parse_stdout, run_command, Package, PackageManager, PackageSource,
     RemovalPreview, RemovalRecord, RemovalResult,
 };
-use serde::Serialize;
-use tauri::Emitter;
 use crate::sysinfo_collector::{self, SystemInfo};
-use std::sync::Arc;
+use serde::Serialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
 pub type SharedManager = Arc<Box<dyn PackageManager>>;
@@ -55,11 +55,7 @@ async fn resolve_flatpak_ref(name: &str) -> String {
         return name.to_string();
     }
 
-    let app_output = run_command(
-        "flatpak",
-        &["list", "--app", "--columns=application,name"],
-    )
-    .await;
+    let app_output = run_command("flatpak", &["list", "--app", "--columns=application,name"]).await;
 
     if let Ok(output) = app_output {
         if let Ok(stdout) = parse_stdout(&output) {
@@ -240,12 +236,15 @@ pub async fn get_system_info(
     }
 
     all_packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
-    info.top_packages_by_size = all_packages.iter()
+    info.top_packages_by_size = all_packages
+        .iter()
         .take(5)
         .map(|p| (p.name.clone(), p.size_bytes))
         .collect();
 
-    info.package_managers = state.managers.iter()
+    info.package_managers = state
+        .managers
+        .iter()
         .map(|m| m.name().to_string())
         .collect();
 
@@ -297,7 +296,10 @@ pub async fn get_reverse_deps(
     let state = state.lock().await;
     let manager = find_manager(&state.managers, &source)
         .ok_or_else(|| format!("No manager found for source {:?}", source))?;
-    manager.get_reverse_deps(&name).await.map_err(|e| e.to_string())
+    manager
+        .get_reverse_deps(&name)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -322,7 +324,8 @@ pub async fn preview_removal(
     let cmd = get_removal_command(&cmd_target, &source);
 
     // Estimate size from files
-    let size: u64 = files.iter()
+    let size: u64 = files
+        .iter()
         .filter_map(|f| std::fs::metadata(f).ok())
         .map(|m| m.len())
         .sum();
@@ -360,10 +363,15 @@ pub async fn execute_removal(
     let manager = find_manager(&state.managers, &source)
         .ok_or_else(|| format!("No manager found for source {:?}", source))?;
 
-    let result = manager.remove(&name, false).await.map_err(|e| e.to_string())?;
+    let result = manager
+        .remove(&name, false)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if result.success {
-        state.db.record_removal(&name, &source, result.space_recovered_bytes, &cmd)
+        state
+            .db
+            .record_removal(&name, &source, result.space_recovered_bytes, &cmd)
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -376,7 +384,11 @@ pub async fn get_removal_history(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<RemovalRecord>, String> {
     let state = state.lock().await;
-    state.db.get_removal_history().await.map_err(|e| e.to_string())
+    state
+        .db
+        .get_removal_history()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
