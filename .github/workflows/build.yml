@@ -1,14 +1,12 @@
-name: build-tauri-linux
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
 
 jobs:
-  build-linux:
+  release-linux:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -26,7 +24,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux system dependencies
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -37,25 +40,17 @@ jobs:
             patchelf
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build bundles for main
-        if: github.ref == 'refs/heads/main'
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: --bundles appimage,deb
-
-      - name: Build and publish bundles for tags
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build and publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Lintd ${{ github.ref_name }}
-          releaseBody: Automated Linux bundle release for Lintd.
-          releaseDraft: false
+          releaseName: "Lintd ${{ github.ref_name }}"
+          releaseBody: |
+            See the [CHANGELOG](https://github.com/mfscpayload-690/lintd/blob/main/CHANGELOG.md) for details.
+          releaseDraft: true
           prerelease: false
           args: --bundles appimage,deb
