@@ -45,6 +45,7 @@ export interface SystemInfo {
   uptime_seconds: number;
   storage: MountPoint[];
   top_packages_by_size: [string, number][]; // Tuple of [name, size_bytes]
+  package_managers: string[];
 }
 
 export type PackageSource =
@@ -106,4 +107,12 @@ export interface BackfillResult {
   scanned: number;
   updated: number;
   skipped: number;
+}
+
+export interface ScanProgressEvent {
+  source: PackageSource;
+  packages: Package[];
+  done_count: number;
+  total_count: number;
+  error?: string;
 }
