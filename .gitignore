@@ -29,6 +29,7 @@ tree_output*.txt
 !.vscode/extensions.json
 !.vscode/launch.json
 !.vscode/tasks.json
+.kiro/*
 .idea
 .DS_Store
 *.suo
