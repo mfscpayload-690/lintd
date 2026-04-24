@@ -127,25 +127,25 @@ export function RemovalModal({ pkg, open, onOpenChange }: RemovalModalProps) {
                 </div>
 
                 {hasReverseDeps ? (
-                  <div className="rounded-md border border-red-500/40 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <div className="border-l-2 border-destructive pl-3 py-2 text-sm text-destructive">
                     ⚠ Removing this may break: {preview.reverse_deps.join(", ")}
                   </div>
                 ) : null}
 
                 {systemCritical ? (
-                  <div className="rounded-md border border-red-500/40 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <div className="border-l-2 border-destructive pl-3 py-2 text-sm text-destructive">
                     System critical - removal blocked
                   </div>
                 ) : null}
 
                 <div>
                   <div className="mb-2 text-sm font-medium">Files to delete</div>
-                  <ScrollArea className="h-[200px] rounded-md border bg-muted/20 p-3">
-                    <div className="space-y-1 font-mono text-xs">
+                  <ScrollArea className="h-[200px] rounded-md border bg-muted/20 p-0">
+                    <div className="space-y-1">
                       {preview.files_to_delete.length === 0 ? (
-                        <div className="text-muted-foreground">No tracked files returned.</div>
+                        <div className="font-mono text-xs leading-5 text-muted-foreground">No tracked files returned.</div>
                       ) : (
-                        preview.files_to_delete.map((file) => <div key={file}>{file}</div>)
+                        preview.files_to_delete.map((file) => <div key={file} className="font-mono text-xs leading-5">{file}</div>)
                       )}
                     </div>
                   </ScrollArea>
@@ -161,7 +161,7 @@ export function RemovalModal({ pkg, open, onOpenChange }: RemovalModalProps) {
                     <pre className="max-h-24 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">
                       {preview.cli_command_preview}
                     </pre>
-                    <Button type="button" size="sm" variant="outline" onClick={copyCommand}>
+                    <Button type="button" size="sm" variant="ghost" onClick={copyCommand}>
                       <Copy className="h-4 w-4" />
                       Copy
                     </Button>

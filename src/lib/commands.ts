@@ -84,3 +84,10 @@ export async function getRemovalHistory(): Promise<RemovalRecord[]> {
 export async function backfillFlatpakHistorySizes(): Promise<BackfillResult> {
   return invoke<BackfillResult>('backfill_flatpak_history_sizes');
 }
+
+/**
+ * Triggers a streaming package scan, emitting progress events via Tauri events.
+ */
+export async function scanPackagesStreaming(): Promise<void> {
+  return invoke<void>('scan_packages_streaming');
+}

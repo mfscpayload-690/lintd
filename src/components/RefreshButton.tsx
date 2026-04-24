@@ -4,30 +4,35 @@ import { Button } from "./ui/button";
 import { useCallback, useState } from "react";
 
 interface RefreshButtonProps {
-  queryKeys: (string | readonly string[])[];
+  queryKeys?: (string | readonly string[])[];
+  onRefresh?: () => void | Promise<void>;
   tooltip?: string;
+  disabled?: boolean;
 }
 
-export function RefreshButton({ queryKeys: keys, tooltip = "Refresh data" }: RefreshButtonProps) {
+export function RefreshButton({ queryKeys: keys, onRefresh, tooltip = "Refresh data", disabled }: RefreshButtonProps) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Invalidate all specified query keys
-      await Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: Array.isArray(key) ? key : [key] })));
+      if (onRefresh) {
+        await onRefresh();
+      } else if (keys) {
+        await Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: Array.isArray(key) ? key : [key] })));
+      }
     } finally {
       setIsRefreshing(false);
     }
-  }, [queryClient, keys]);
+  }, [queryClient, keys, onRefresh]);
 
   return (
     <Button
       variant="outline"
       size="sm"
       onClick={handleRefresh}
-      disabled={isRefreshing}
+      disabled={isRefreshing || disabled}
       title={tooltip}
       className="gap-2"
     >
