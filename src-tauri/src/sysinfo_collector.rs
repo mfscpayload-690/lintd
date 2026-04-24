@@ -40,7 +40,7 @@ pub struct SystemInfo {
 /// Detect NVIDIA GPU using nvidia-smi
 fn detect_nvidia_gpu() -> Option<(String, u64, u64)> {
     let output = Command::new("nvidia-smi")
-        .args(&[
+        .args([
             "--query-gpu=name,memory.used,memory.total",
             "--format=csv,noheader,nounits",
         ])
