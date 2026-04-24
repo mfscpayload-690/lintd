@@ -1,17 +1,18 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Loader2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { executeRemoval, getOrphans, previewRemoval } from "../lib/commands";
 import { formatBytes, formatDate } from "../lib/format";
 import { sourceBadgeClassMap, sourceLabelMap, usageBadgeClassMap, usageLabelMap } from "../lib/presentation";
 import { queryKeys } from "../lib/query-keys";
+import { useStreamingScan } from "../lib/use-streaming-scan";
 import type { Package, RemovalPreview } from "../types/lintd";
 import { RefreshButton } from "../components/RefreshButton";
 import { RemovalModal } from "../components/RemovalModal";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { Progress } from "../components/ui/progress";
 import {
   Table,
   TableBody,
@@ -37,20 +39,6 @@ interface RemoveAllSummary {
   totalSafeSpace: number;
 }
 
-function LoadingRows() {
-  return (
-    <>
-      {Array.from({ length: 8 }).map((_, index) => (
-        <TableRow key={index}>
-          <TableCell colSpan={9}>
-            <div className="h-5 w-full animate-pulse rounded bg-muted" />
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
-  );
-}
-
 export function Orphans() {
   const queryClient = useQueryClient();
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
@@ -58,15 +46,23 @@ export function Orphans() {
   const [summary, setSummary] = useState<RemoveAllSummary | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const orphansQuery = useQuery({
-    queryKey: queryKeys.orphans,
-    queryFn: getOrphans,
-  });
+  const { packages, isScanning, progress, managersDone, managersTotal, errors, startScan } =
+    useStreamingScan();
+
+  // Start scan on mount
+  useEffect(() => {
+    void startScan();
+  }, [startScan]);
+
+  // Filter to orphans only
+  const orphans = useMemo(() => packages.filter((pkg) => pkg.is_orphan), [packages]);
 
   const removeAllPreviewMutation = useMutation({
-    mutationFn: async (orphans: Package[]): Promise<RemoveAllSummary> => {
+    mutationFn: async (): Promise<RemoveAllSummary> => {
+      // Fetch a clean snapshot for the "Remove All" flow
+      const freshOrphans = await getOrphans();
       const previews: RemovalPreview[] = [];
-      for (const orphan of orphans) {
+      for (const orphan of freshOrphans) {
         const preview = await previewRemoval(orphan.name, orphan.source);
         previews.push(preview);
       }
@@ -86,7 +82,6 @@ export function Orphans() {
     },
   });
 
-  const orphans = orphansQuery.data ?? [];
   const pageRows = useMemo(() => {
     const totalPages = Math.max(1, Math.ceil(orphans.length / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages);
@@ -139,13 +134,20 @@ export function Orphans() {
 
     setSummaryOpen(false);
     setSummary(null);
+
+    // Re-scan after removal
+    void startScan();
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Orphans</h1>
-        <RefreshButton queryKeys={[queryKeys.orphans]} tooltip="Refresh orphan packages" />
+        <RefreshButton
+          onRefresh={startScan}
+          disabled={isScanning}
+          tooltip="Refresh orphan packages"
+        />
       </div>
       <Card>
         <CardContent className="pt-6">
@@ -159,8 +161,8 @@ export function Orphans() {
             </div>
             <Button
               variant="destructive"
-              disabled={orphans.length === 0 || removeAllPreviewMutation.isPending}
-              onClick={() => removeAllPreviewMutation.mutate(orphans)}
+              disabled={orphans.length === 0 || removeAllPreviewMutation.isPending || isScanning}
+              onClick={() => removeAllPreviewMutation.mutate()}
             >
               {removeAllPreviewMutation.isPending ? (
                 <>
@@ -176,38 +178,61 @@ export function Orphans() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Orphan Packages</CardTitle>
-        </CardHeader>
         <CardContent>
-          {orphansQuery.isLoading ? (
+          {/* Scan progress bar */}
+          {isScanning && (
+            <div className="mb-4 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Scanning: {managersDone}/{managersTotal} managers
+                </span>
+                {errors.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    {errors.map((err, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive"
+                        title={err}
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        Error
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Progress value={progress} className="h-1.5" />
+            </div>
+          )}
+
+          {isScanning && orphans.length === 0 ? (
             <Table>
               <TableBody>
-                <LoadingRows />
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    Scanning packages…
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           ) : null}
 
-          {orphansQuery.isError ? (
+          {!isScanning && orphans.length === 0 && errors.length > 0 ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              <div className="mb-2">
-                {orphansQuery.error instanceof Error
-                  ? orphansQuery.error.message
-                  : "Failed to load orphan packages"}
-              </div>
-              <Button size="sm" onClick={() => void orphansQuery.refetch()}>
+              <div className="mb-2">{errors[0]}</div>
+              <Button size="sm" onClick={() => void startScan()}>
                 Retry
               </Button>
             </div>
           ) : null}
 
-          {!orphansQuery.isLoading && !orphansQuery.isError && orphans.length === 0 ? (
+          {!isScanning && orphans.length === 0 && errors.length === 0 ? (
             <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
               No orphan packages found
             </div>
           ) : null}
 
-          {!orphansQuery.isLoading && !orphansQuery.isError && orphans.length > 0 ? (
+          {orphans.length > 0 ? (
             <>
               <Table>
                 <TableHeader>
@@ -225,18 +250,18 @@ export function Orphans() {
                 </TableHeader>
                 <TableBody>
                   {pageRows.map((pkg) => (
-                    <TableRow key={`${pkg.source}:${pkg.name}`}>
-                      <TableCell className="font-medium">{pkg.name}</TableCell>
+                    <TableRow key={`${pkg.source}:${pkg.name}`} className="h-8 font-mono text-xs">
+                      <TableCell className="font-medium font-mono">{pkg.name}</TableCell>
                       <TableCell className="max-w-[260px] truncate">{pkg.description || "-"}</TableCell>
                       <TableCell>
                         <Badge className={cn("border-0", sourceBadgeClassMap[pkg.source])}>
                           {sourceLabelMap[pkg.source]}
                         </Badge>
                       </TableCell>
-                      <TableCell>{pkg.version}</TableCell>
-                      <TableCell>{formatBytes(pkg.size_bytes)}</TableCell>
-                      <TableCell>{formatDate(pkg.install_date)}</TableCell>
-                      <TableCell>{formatDate(pkg.last_used)}</TableCell>
+                      <TableCell className="font-mono">{pkg.version}</TableCell>
+                      <TableCell className="font-mono">{formatBytes(pkg.size_bytes)}</TableCell>
+                      <TableCell className="font-mono">{formatDate(pkg.install_date)}</TableCell>
+                      <TableCell className="font-mono">{formatDate(pkg.last_used)}</TableCell>
                       <TableCell>
                         <Badge className={cn("border-0", usageBadgeClassMap[pkg.usage_tag])}>
                           {usageLabelMap[pkg.usage_tag]}
@@ -254,7 +279,7 @@ export function Orphans() {
 
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * PAGE_SIZE + 1}-
+                  Showing {(currentPage - 1) * PAGE_SIZE + (pageRows.length > 0 ? 1 : 0)}-
                   {(currentPage - 1) * PAGE_SIZE + pageRows.length} of {orphans.length}
                 </div>
                 <div className="flex items-center gap-2">
