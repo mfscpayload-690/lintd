@@ -5,12 +5,16 @@ use crate::pmal::{
     RemovalPreview, RemovalRecord, RemovalResult,
 };
 use serde::Serialize;
+use tauri::Emitter;
 use crate::sysinfo_collector::{self, SystemInfo};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
 
+pub type SharedManager = Arc<Box<dyn PackageManager>>;
+
 pub struct AppState {
-    pub managers: Vec<Box<dyn PackageManager>>,
+    pub managers: Vec<SharedManager>,
     pub distro: distro_detect::DistroInfo,
     pub db: Database,
 }
@@ -20,6 +24,15 @@ pub struct BackfillResult {
     pub scanned: u64,
     pub updated: u64,
     pub skipped: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ScanProgressEvent {
+    pub source: String,
+    pub packages: Vec<Package>,
+    pub done_count: usize,
+    pub total_count: usize,
+    pub error: Option<String>,
 }
 
 fn get_removal_command(name: &str, source: &PackageSource) -> String {
@@ -148,10 +161,66 @@ async fn estimate_flatpak_ref_size_bytes(pkg_ref: &str) -> u64 {
 }
 
 fn find_manager<'a>(
-    managers: &'a [Box<dyn PackageManager>],
+    managers: &'a [SharedManager],
     source: &PackageSource,
-) -> Option<&'a Box<dyn PackageManager>> {
+) -> Option<&'a SharedManager> {
     managers.iter().find(|m| &m.source() == source)
+}
+
+pub async fn collect_packages_concurrent(managers: Vec<SharedManager>) -> Vec<Package> {
+    let tasks: Vec<_> = managers
+        .into_iter()
+        .map(|manager| {
+            tokio::task::spawn(async move {
+                match manager.list_user_installed().await {
+                    Ok(pkgs) => pkgs,
+                    Err(e) => {
+                        eprintln!("Error listing packages from {}: {}", manager.name(), e);
+                        vec![]
+                    }
+                }
+            })
+        })
+        .collect();
+
+    let results = futures::future::join_all(tasks).await;
+
+    let mut packages: Vec<Package> = results
+        .into_iter()
+        .filter_map(|r| r.ok())
+        .flatten()
+        .collect();
+
+    packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    packages
+}
+
+pub async fn collect_orphans_concurrent(managers: Vec<SharedManager>) -> Vec<Package> {
+    let tasks: Vec<_> = managers
+        .into_iter()
+        .map(|manager| {
+            tokio::task::spawn(async move {
+                match manager.list_orphans().await {
+                    Ok(pkgs) => pkgs,
+                    Err(e) => {
+                        eprintln!("Error listing orphans from {}: {}", manager.name(), e);
+                        vec![]
+                    }
+                }
+            })
+        })
+        .collect();
+
+    let results = futures::future::join_all(tasks).await;
+
+    let mut packages: Vec<Package> = results
+        .into_iter()
+        .filter_map(|r| r.ok())
+        .flatten()
+        .collect();
+
+    packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    packages
 }
 
 #[tauri::command]
@@ -176,6 +245,10 @@ pub async fn get_system_info(
         .map(|p| (p.name.clone(), p.size_bytes))
         .collect();
 
+    info.package_managers = state.managers.iter()
+        .map(|m| m.name().to_string())
+        .collect();
+
     Ok(info)
 }
 
@@ -183,39 +256,23 @@ pub async fn get_system_info(
 pub async fn get_all_packages(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<Package>, String> {
-    let state = state.lock().await;
-    let mut all_packages: Vec<Package> = Vec::new();
-
-    for manager in &state.managers {
-        match manager.list_user_installed().await {
-            Ok(pkgs) => all_packages.extend(pkgs),
-            Err(e) => {
-                eprintln!("Error listing packages from {}: {}", manager.name(), e);
-            }
-        }
-    }
-
-    all_packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
-    Ok(all_packages)
+    let managers: Vec<SharedManager> = {
+        let state = state.lock().await;
+        state.managers.iter().map(Arc::clone).collect()
+    };
+    let packages = collect_packages_concurrent(managers).await;
+    Ok(packages)
 }
 
 #[tauri::command]
 pub async fn get_orphans(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<Package>, String> {
-    let state = state.lock().await;
-    let mut orphans: Vec<Package> = Vec::new();
-
-    for manager in &state.managers {
-        match manager.list_orphans().await {
-            Ok(pkgs) => orphans.extend(pkgs),
-            Err(e) => {
-                eprintln!("Error listing orphans from {}: {}", manager.name(), e);
-            }
-        }
-    }
-
-    orphans.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    let managers: Vec<SharedManager> = {
+        let state = state.lock().await;
+        state.managers.iter().map(Arc::clone).collect()
+    };
+    let orphans = collect_orphans_concurrent(managers).await;
     Ok(orphans)
 }
 
@@ -361,4 +418,45 @@ pub async fn backfill_flatpak_history_sizes(
         updated,
         skipped,
     })
+}
+
+#[tauri::command]
+pub async fn scan_packages_streaming(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<(), String> {
+    let managers: Vec<SharedManager> = {
+        let state = state.lock().await;
+        state.managers.iter().map(Arc::clone).collect()
+    };
+
+    let total_count = managers.len();
+    let done_count = Arc::new(AtomicUsize::new(0));
+
+    let tasks: Vec<_> = managers
+        .into_iter()
+        .map(|manager| {
+            let app = app.clone();
+            let done_count = Arc::clone(&done_count);
+            tokio::task::spawn(async move {
+                let result = manager.list_user_installed().await;
+                let done = done_count.fetch_add(1, Ordering::SeqCst) + 1;
+                let (packages, error) = match result {
+                    Ok(pkgs) => (pkgs, None),
+                    Err(e) => (vec![], Some(e.to_string())),
+                };
+                let event = ScanProgressEvent {
+                    source: manager.name().to_string(),
+                    packages,
+                    done_count: done,
+                    total_count,
+                    error,
+                };
+                let _ = app.emit("scan_progress", event);
+            })
+        })
+        .collect();
+
+    futures::future::join_all(tasks).await;
+    Ok(())
 }
