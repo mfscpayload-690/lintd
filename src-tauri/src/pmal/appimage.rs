@@ -126,7 +126,7 @@ impl PackageManager for AppImageBackend {
                         space_recovered_bytes: size,
                     });
                 }
-                std::fs::remove_file(path).map_err(|e| PmalError::IoError(e))?;
+                std::fs::remove_file(path).map_err(PmalError::IoError)?;
                 Ok(RemovalResult {
                     package_name: pkg.into(),
                     success: true,
