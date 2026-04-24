@@ -54,11 +54,8 @@ pub fn run() {
                             _ => vec![],
                         };
                         if !rgba.is_empty() {
-                            let icon = tauri::image::Image::new_owned(
-                                rgba,
-                                info.width,
-                                info.height,
-                            );
+                            let icon =
+                                tauri::image::Image::new_owned(rgba, info.width, info.height);
                             let _ = window.set_icon(icon);
                         }
                     }

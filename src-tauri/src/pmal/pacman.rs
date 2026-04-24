@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 
@@ -126,7 +126,10 @@ impl PackageManager for PacmanBackend {
         // Get explicitly installed packages
         let output = run_command("pacman", &["-Qe"]).await?;
         let stdout = parse_stdout(&output)?;
-        let pkg_names: Vec<&str> = stdout.lines().filter_map(|l| l.split_whitespace().next()).collect();
+        let pkg_names: Vec<&str> = stdout
+            .lines()
+            .filter_map(|l| l.split_whitespace().next())
+            .collect();
 
         if pkg_names.is_empty() {
             return Ok(Vec::new());
@@ -170,7 +173,10 @@ impl PackageManager for PacmanBackend {
             return Ok(Vec::new());
         }
 
-        let pkg_names: Vec<&str> = stdout.lines().filter_map(|l| l.split_whitespace().next()).collect();
+        let pkg_names: Vec<&str> = stdout
+            .lines()
+            .filter_map(|l| l.split_whitespace().next())
+            .collect();
 
         if pkg_names.is_empty() {
             return Ok(Vec::new());

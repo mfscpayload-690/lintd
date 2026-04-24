@@ -197,9 +197,9 @@ const SYSTEM_CRITICAL_PACKAGES: &[&str] = &[
 
 pub fn is_system_critical(name: &str) -> bool {
     let lower = name.to_lowercase();
-    SYSTEM_CRITICAL_PACKAGES.iter().any(|&critical| {
-        lower == critical || lower.starts_with(&format!("{}-", critical))
-    })
+    SYSTEM_CRITICAL_PACKAGES
+        .iter()
+        .any(|&critical| lower == critical || lower.starts_with(&format!("{}-", critical)))
 }
 
 // ── PackageManager trait ─────────────────────────────────────────
@@ -416,20 +416,8 @@ pub fn compute_usage_tag(last_used: Option<DateTime<Utc>>) -> UsageTag {
 fn is_always_active_package(pkg_name: &str) -> bool {
     let lower = pkg_name.to_lowercase();
     let patterns = [
-        "lib",
-        "headers",
-        "dkms",
-        "devel",
-        "dev",
-        "-git",
-        "firmware",
-        "driver",
-        "kernel",
-        "linux-",
-        "codec",
-        "runtime",
-        "gtk",
-        "qt",
+        "lib", "headers", "dkms", "devel", "dev", "-git", "firmware", "driver", "kernel", "linux-",
+        "codec", "runtime", "gtk", "qt",
     ];
 
     patterns.iter().any(|p| lower.contains(p))
@@ -461,7 +449,10 @@ fn newer_atime_than_mtime(path: &Path) -> Option<DateTime<Utc>> {
     Some(accessed.into())
 }
 
-fn max_dt(current: Option<DateTime<Utc>>, candidate: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+fn max_dt(
+    current: Option<DateTime<Utc>>,
+    candidate: Option<DateTime<Utc>>,
+) -> Option<DateTime<Utc>> {
     match (current, candidate) {
         (None, None) => None,
         (Some(v), None) | (None, Some(v)) => Some(v),

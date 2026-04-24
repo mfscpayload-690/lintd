@@ -1,6 +1,6 @@
 use crate::pmal::{
-    compute_usage_tag, get_last_used_time, run_command, parse_stdout,
-    Package, PackageManager, PackageSource, PmalError, RemovalResult,
+    compute_usage_tag, get_last_used_time, parse_stdout, run_command, Package, PackageManager,
+    PackageSource, PmalError, RemovalResult,
 };
 
 pub struct FlatpakBackend;
@@ -17,11 +17,8 @@ impl FlatpakBackend {
         }
 
         // Match by display name for installed apps and runtimes.
-        let app_output = run_command(
-            "flatpak",
-            &["list", "--app", "--columns=application,name"],
-        )
-        .await;
+        let app_output =
+            run_command("flatpak", &["list", "--app", "--columns=application,name"]).await;
 
         if let Ok(output) = app_output {
             if let Ok(stdout) = parse_stdout(&output) {
@@ -72,11 +69,7 @@ impl FlatpakBackend {
 
             if let Some((_, value_part)) = line.split_once(':') {
                 let value = value_part.trim();
-                let human = value
-                    .split('(')
-                    .next()
-                    .unwrap_or(value)
-                    .trim();
+                let human = value.split('(').next().unwrap_or(value).trim();
                 let parsed = Self::parse_flatpak_size(human);
                 if parsed > 0 {
                     return parsed;
@@ -143,8 +136,8 @@ impl PackageManager for FlatpakBackend {
                 String::new()
             };
 
-            let last_used = get_last_used_time(&app_id, &[])
-                .or_else(|| get_last_used_time(&name, &[]));
+            let last_used =
+                get_last_used_time(&app_id, &[]).or_else(|| get_last_used_time(&name, &[]));
             let usage_tag = compute_usage_tag(last_used);
 
             packages.push(Package {
@@ -178,11 +171,7 @@ impl PackageManager for FlatpakBackend {
         let stdout = parse_stdout(&output)?;
 
         // Get list of runtimes actually used by apps
-        let used_output = run_command(
-            "flatpak",
-            &["list", "--app", "--columns=runtime"],
-        )
-        .await;
+        let used_output = run_command("flatpak", &["list", "--app", "--columns=runtime"]).await;
         let used_runtimes: Vec<String> = if let Ok(uo) = used_output {
             if let Ok(us) = parse_stdout(&uo) {
                 us.lines()
@@ -314,11 +303,7 @@ impl PackageManager for FlatpakBackend {
             });
         }
 
-        let output = run_command(
-            "flatpak",
-            &["uninstall", "-y", &pkg_ref],
-        )
-        .await?;
+        let output = run_command("flatpak", &["uninstall", "-y", &pkg_ref]).await?;
 
         if output.status.success() {
             Ok(RemovalResult {
@@ -358,7 +343,9 @@ impl FlatpakBackend {
             "org.gnome.Platform.GL",
         ];
 
-        extension_patterns.iter().any(|pattern| app_id.contains(pattern))
+        extension_patterns
+            .iter()
+            .any(|pattern| app_id.contains(pattern))
     }
 
     fn parse_flatpak_size(s: &str) -> u64 {

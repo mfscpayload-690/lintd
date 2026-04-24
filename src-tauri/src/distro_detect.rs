@@ -35,12 +35,17 @@ pub fn detect_distro() -> DistroInfo {
         }
     }
 
-    let id = fields.get("ID").cloned().unwrap_or_else(|| "unknown".into());
-    let name = fields.get("PRETTY_NAME")
+    let id = fields
+        .get("ID")
+        .cloned()
+        .unwrap_or_else(|| "unknown".into());
+    let name = fields
+        .get("PRETTY_NAME")
         .or_else(|| fields.get("NAME"))
         .cloned()
         .unwrap_or_else(|| "Unknown Linux".into());
-    let version = fields.get("VERSION_ID")
+    let version = fields
+        .get("VERSION_ID")
         .or_else(|| fields.get("VERSION"))
         .cloned()
         .unwrap_or_default();
@@ -61,8 +66,9 @@ pub fn detect_distro() -> DistroInfo {
         "rhel" | "centos" | "rocky" | "alma" => (DistroFamily::FedoraFamily, "fedora"),
         "alpine" => (DistroFamily::AlpineFamily, "alpine"),
         "nixos" => (DistroFamily::NixFamily, "nixos"),
-        "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" =>
-            (DistroFamily::SuseFamily, "opensuse"),
+        "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" => {
+            (DistroFamily::SuseFamily, "opensuse")
+        }
         _ => {
             if id_like.contains("arch") {
                 (DistroFamily::ArchFamily, "arch")
@@ -92,25 +98,39 @@ pub fn detect_package_managers() -> Vec<Box<dyn PackageManager>> {
     let mut managers: Vec<Box<dyn PackageManager>> = Vec::new();
 
     let pacman = pmal::pacman::PacmanBackend::new();
-    if pacman.detect() { managers.push(Box::new(pacman)); }
+    if pacman.detect() {
+        managers.push(Box::new(pacman));
+    }
 
     let apt = pmal::apt::AptBackend::new();
-    if apt.detect() { managers.push(Box::new(apt)); }
+    if apt.detect() {
+        managers.push(Box::new(apt));
+    }
 
     let dnf = pmal::dnf::DnfBackend::new();
-    if dnf.detect() { managers.push(Box::new(dnf)); }
+    if dnf.detect() {
+        managers.push(Box::new(dnf));
+    }
 
     let apk = pmal::apk::ApkBackend::new();
-    if apk.detect() { managers.push(Box::new(apk)); }
+    if apk.detect() {
+        managers.push(Box::new(apk));
+    }
 
     let nix = pmal::nix::NixBackend::new();
-    if nix.detect() { managers.push(Box::new(nix)); }
+    if nix.detect() {
+        managers.push(Box::new(nix));
+    }
 
     let flatpak = pmal::flatpak::FlatpakBackend::new();
-    if flatpak.detect() { managers.push(Box::new(flatpak)); }
+    if flatpak.detect() {
+        managers.push(Box::new(flatpak));
+    }
 
     let snap = pmal::snap::SnapBackend::new();
-    if snap.detect() { managers.push(Box::new(snap)); }
+    if snap.detect() {
+        managers.push(Box::new(snap));
+    }
 
     // AppImage scanner is always available
     managers.push(Box::new(pmal::appimage::AppImageBackend::new()));

@@ -6,7 +6,9 @@ use chrono::{DateTime, Utc};
 pub struct AppImageBackend;
 
 impl AppImageBackend {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     fn scan_dirs() -> Vec<String> {
         let home = std::env::var("HOME").unwrap_or_default();
@@ -22,7 +24,9 @@ impl AppImageBackend {
         let mut results = Vec::new();
         for dir in Self::scan_dirs() {
             let path = std::path::Path::new(&dir);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
                     let p = entry.path();
@@ -42,9 +46,15 @@ impl AppImageBackend {
 
 #[async_trait::async_trait]
 impl PackageManager for AppImageBackend {
-    fn name(&self) -> &str { "appimage" }
-    fn source(&self) -> PackageSource { PackageSource::AppImage }
-    fn detect(&self) -> bool { true } // Always available as a FS scanner
+    fn name(&self) -> &str {
+        "appimage"
+    }
+    fn source(&self) -> PackageSource {
+        PackageSource::AppImage
+    }
+    fn detect(&self) -> bool {
+        true
+    } // Always available as a FS scanner
 
     async fn list_user_installed(&self) -> Result<Vec<Package>, PmalError> {
         let appimages = Self::find_appimages();
@@ -93,7 +103,8 @@ impl PackageManager for AppImageBackend {
 
     async fn get_files(&self, pkg: &str) -> Result<Vec<String>, PmalError> {
         let appimages = Self::find_appimages();
-        let files: Vec<String> = appimages.into_iter()
+        let files: Vec<String> = appimages
+            .into_iter()
             .filter(|(p, _)| p.contains(pkg))
             .map(|(p, _)| p)
             .collect();
@@ -109,14 +120,16 @@ impl PackageManager for AppImageBackend {
                 let size = meta.len();
                 if dry_run {
                     return Ok(RemovalResult {
-                        package_name: pkg.into(), success: true,
+                        package_name: pkg.into(),
+                        success: true,
                         message: format!("Dry run: would delete {}", path),
                         space_recovered_bytes: size,
                     });
                 }
-                std::fs::remove_file(path).map_err(|e| PmalError::IoError(e))?;
+                std::fs::remove_file(path).map_err(PmalError::IoError)?;
                 Ok(RemovalResult {
-                    package_name: pkg.into(), success: true,
+                    package_name: pkg.into(),
+                    success: true,
                     message: format!("Deleted {}", path),
                     space_recovered_bytes: size,
                 })
