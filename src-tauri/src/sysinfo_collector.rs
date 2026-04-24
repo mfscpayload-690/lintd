@@ -34,6 +34,7 @@ pub struct SystemInfo {
     pub uptime_seconds: u64,
     pub storage: Vec<MountPoint>,
     pub top_packages_by_size: Vec<(String, u64)>,
+    pub package_managers: Vec<String>,
 }
 
 /// Detect NVIDIA GPU using nvidia-smi
@@ -149,5 +150,6 @@ pub fn collect_system_info(
         uptime_seconds,
         storage,
         top_packages_by_size: Vec::new(), // Populated after package scan
+        package_managers: Vec::new(),     // Populated in get_system_info command
     }
 }
