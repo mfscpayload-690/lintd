@@ -132,15 +132,15 @@ export function History() {
                 {!historyQuery.isLoading &&
                   !historyQuery.isError &&
                   historyQuery.data?.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{record.package_name}</TableCell>
+                    <TableRow key={record.id} className="h-8 font-mono text-xs">
+                      <TableCell className="font-medium font-mono">{record.package_name}</TableCell>
                       <TableCell>
                         <Badge className={cn("border-0", sourceBadgeClassMap[record.source])}>
                           {sourceLabelMap[record.source]}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatDate(record.removed_at)}</TableCell>
-                      <TableCell>{formatBytes(record.space_recovered_bytes)}</TableCell>
+                      <TableCell className="font-mono">{formatDate(record.removed_at)}</TableCell>
+                      <TableCell className="font-mono">{formatBytes(record.space_recovered_bytes)}</TableCell>
                       <TableCell className="max-w-[360px]">
                         <Tooltip>
                           <TooltipTrigger asChild>
