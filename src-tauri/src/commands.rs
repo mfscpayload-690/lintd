@@ -6,6 +6,7 @@ use crate::pmal::{
 };
 use crate::sysinfo_collector::{self, SystemInfo};
 use serde::Serialize;
+use std::cmp::Reverse;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
@@ -187,7 +188,7 @@ pub async fn collect_packages_concurrent(managers: Vec<SharedManager>) -> Vec<Pa
         .flatten()
         .collect();
 
-    packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    packages.sort_by_key(|p| Reverse(p.size_bytes));
     packages
 }
 
@@ -215,7 +216,7 @@ pub async fn collect_orphans_concurrent(managers: Vec<SharedManager>) -> Vec<Pac
         .flatten()
         .collect();
 
-    packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    packages.sort_by_key(|p| Reverse(p.size_bytes));
     packages
 }
 
@@ -235,7 +236,7 @@ pub async fn get_system_info(
         }
     }
 
-    all_packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    all_packages.sort_by_key(|p| Reverse(p.size_bytes));
     info.top_packages_by_size = all_packages
         .iter()
         .take(5)
