@@ -1,7 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
-import { getAllPackages } from "../lib/commands";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { formatBytes, formatDate } from "../lib/format";
 import {
   PACKAGE_SOURCES,
@@ -11,15 +9,16 @@ import {
   usageBadgeClassMap,
   usageLabelMap,
 } from "../lib/presentation";
-import { queryKeys } from "../lib/query-keys";
 import { useDebouncedValue } from "../lib/use-debounced-value";
+import { useStreamingScan } from "../lib/use-streaming-scan";
 import type { Package, PackageSource, UsageTag } from "../types/lintd";
 import { RefreshButton } from "../components/RefreshButton";
 import { RemovalModal } from "../components/RemovalModal";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { Progress } from "../components/ui/progress";
 import {
   Table,
   TableBody,
@@ -68,20 +67,6 @@ function compareValue(pkg: Package, key: SortKey): string | number {
   }
 }
 
-function LoadingRows() {
-  return (
-    <>
-      {Array.from({ length: 10 }).map((_, index) => (
-        <TableRow key={index}>
-          <TableCell colSpan={9}>
-            <div className="h-5 w-full animate-pulse rounded bg-muted" />
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
-  );
-}
-
 function isLikelyCritical(pkg: Package): boolean {
   const name = pkg.name.toLowerCase();
   const exactMatches = new Set([
@@ -125,15 +110,16 @@ export function Packages() {
 
   const debouncedSearch = useDebouncedValue(searchInput, 300).trim().toLowerCase();
 
-  const packagesQuery = useQuery({
-    queryKey: queryKeys.allPackages,
-    queryFn: getAllPackages,
-  });
+  const { packages, isScanning, progress, managersDone, managersTotal, errors, startScan } =
+    useStreamingScan();
+
+  // Start scan on mount
+  useEffect(() => {
+    void startScan();
+  }, [startScan]);
 
   const filteredAndSorted = useMemo(() => {
-    const all = packagesQuery.data ?? [];
-
-    const filtered = all.filter((pkg) => {
+    const filtered = packages.filter((pkg) => {
       if (debouncedSearch.length > 0 && !pkg.name.toLowerCase().includes(debouncedSearch)) {
         return false;
       }
@@ -159,7 +145,7 @@ export function Packages() {
     });
 
     return filtered;
-  }, [debouncedSearch, packagesQuery.data, sortDirection, sortKey, sourceFilter, usageFilter]);
+  }, [debouncedSearch, packages, sortDirection, sortKey, sourceFilter, usageFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -179,12 +165,13 @@ export function Packages() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Packages</h1>
-        <RefreshButton queryKeys={[queryKeys.allPackages]} tooltip="Refresh package list" />
+        <RefreshButton
+          onRefresh={startScan}
+          disabled={isScanning}
+          tooltip="Refresh package list"
+        />
       </div>
       <Card>
-        <CardHeader>
-          <CardTitle>Packages</CardTitle>
-        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="relative">
@@ -236,7 +223,33 @@ export function Packages() {
       </Card>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-3">
+          {/* Scan progress bar */}
+          {isScanning && (
+            <div className="mb-4 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Scanning: {managersDone}/{managersTotal} managers
+                </span>
+                {errors.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    {errors.map((err, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive"
+                        title={err}
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        Error
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Progress value={progress} className="h-1.5" />
+            </div>
+          )}
+
           <Table>
             <TableHeader>
               <TableRow>
@@ -268,18 +281,22 @@ export function Packages() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {packagesQuery.isLoading ? <LoadingRows /> : null}
+              {isScanning && packages.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    Scanning packages…
+                  </TableCell>
+                </TableRow>
+              ) : null}
 
-              {packagesQuery.isError ? (
+              {!isScanning && packages.length === 0 && errors.length > 0 ? (
                 <TableRow>
                   <TableCell colSpan={9}>
                     <div className="flex items-center justify-between rounded-md border border-destructive/40 bg-destructive/10 p-3">
                       <span className="text-sm text-destructive">
-                        {packagesQuery.error instanceof Error
-                          ? packagesQuery.error.message
-                          : "Failed to load packages"}
+                        {errors[0]}
                       </span>
-                      <Button size="sm" onClick={() => void packagesQuery.refetch()}>
+                      <Button size="sm" onClick={() => void startScan()}>
                         Retry
                       </Button>
                     </div>
@@ -287,7 +304,7 @@ export function Packages() {
                 </TableRow>
               ) : null}
 
-              {!packagesQuery.isLoading && !packagesQuery.isError && pageRows.length === 0 ? (
+              {packages.length > 0 && pageRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-muted-foreground">
                     No packages match the selected filters.
@@ -295,39 +312,37 @@ export function Packages() {
                 </TableRow>
               ) : null}
 
-              {!packagesQuery.isLoading &&
-                !packagesQuery.isError &&
-                pageRows.map((pkg) => (
-                  <TableRow key={`${pkg.source}:${pkg.name}`}>
-                    <TableCell className="font-medium">{pkg.name}</TableCell>
-                    <TableCell className="max-w-[260px] truncate">{pkg.description || "-"}</TableCell>
-                    <TableCell>
-                      <Badge className={cn("border-0", sourceBadgeClassMap[pkg.source])}>
-                        {sourceLabelMap[pkg.source]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{pkg.version}</TableCell>
-                    <TableCell>{formatBytes(pkg.size_bytes)}</TableCell>
-                    <TableCell>{formatDate(pkg.install_date)}</TableCell>
-                    <TableCell>{formatDate(pkg.last_used)}</TableCell>
-                    <TableCell>
-                      <Badge className={cn("border-0", usageBadgeClassMap[pkg.usage_tag])}>
-                        {usageLabelMap[pkg.usage_tag]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isLikelyCritical(pkg) ? (
-                        <Button size="sm" variant="outline" disabled className="opacity-50 cursor-not-allowed">
-                          System Package
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => setSelectedPackage(pkg)}>
-                          Inspect & Remove
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+              {pageRows.map((pkg) => (
+                <TableRow key={`${pkg.source}:${pkg.name}`} className="h-8 font-mono text-xs">
+                  <TableCell className="font-medium font-mono">{pkg.name}</TableCell>
+                  <TableCell className="max-w-[260px] truncate">{pkg.description || "-"}</TableCell>
+                  <TableCell>
+                    <Badge className={cn("border-0", sourceBadgeClassMap[pkg.source])}>
+                      {sourceLabelMap[pkg.source]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono">{pkg.version}</TableCell>
+                  <TableCell className="font-mono">{formatBytes(pkg.size_bytes)}</TableCell>
+                  <TableCell className="font-mono">{formatDate(pkg.install_date)}</TableCell>
+                  <TableCell className="font-mono">{formatDate(pkg.last_used)}</TableCell>
+                  <TableCell>
+                    <Badge className={cn("border-0", usageBadgeClassMap[pkg.usage_tag])}>
+                      {usageLabelMap[pkg.usage_tag]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {isLikelyCritical(pkg) ? (
+                      <Button size="sm" variant="outline" disabled className="cursor-not-allowed opacity-50">
+                        System Package
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setSelectedPackage(pkg)}>
+                        Inspect & Remove
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
 
