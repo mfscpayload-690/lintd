@@ -44,7 +44,7 @@ impl SnapBackend {
     }
 
     fn parse_size(s: &str) -> u64 {
-        let parts: Vec<&str> = s.trim().split_whitespace().collect();
+        let parts: Vec<&str> = s.split_whitespace().collect();
         if parts.is_empty() {
             return 0;
         }
